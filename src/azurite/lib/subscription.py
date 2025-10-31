@@ -1,6 +1,6 @@
 import json
 
-from lolite.lib.logger import Logger as logger
+from azurite.lib.logger import Logger as logger
 
 
 class Subscription():

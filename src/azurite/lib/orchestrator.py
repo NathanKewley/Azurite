@@ -2,11 +2,11 @@ import yaml
 import json
 import os
 
-from lolite.lib.subproc import Subproc
-from lolite.lib.logger import Logger as logger
-from lolite.lib.deployer import Deployer
-from lolite.lib.subscription import Subscription
-from lolite.lib.hook_orchestrator import HookOrchestrator
+from azurite.lib.subproc import Subproc
+from azurite.lib.logger import Logger as logger
+from azurite.lib.deployer import Deployer
+from azurite.lib.subscription import Subscription
+from azurite.lib.hook_orchestrator import HookOrchestrator
 
 class Orchestrator():
 
@@ -66,7 +66,7 @@ class Orchestrator():
         self.subscription.set_subscription(subscription)
 
     def deploy(self, configuration, dry_run=False):
-        if not configuration in self.deploys:
+        if configuration not in self.deploys:
             self.deploys.append(configuration)
             config = self.load_config(configuration)
             location = self.load_location(configuration)

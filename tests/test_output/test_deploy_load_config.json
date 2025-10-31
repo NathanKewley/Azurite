@@ -1,8 +1,8 @@
 {
     "bicep_path": "automation/automation_account.bicep",
     "params": {
-        "location": "Ref:lolite-test.rg-lolite-test-01.lolite_automation_storage:storageLocation",
-        "appName": "loliteAutomation",
+        "location": "Ref:azurite-sample.rg-azurite-sample-01.azurite_automation_storage:storageLocation",
+        "appName": "azuriteAutomation",
         "skuName": "Free"
     }
 }

@@ -1,4 +1,4 @@
-from lolite.lib.hooks.hook_base import HookBase
+from azurite.lib.hooks.hook_base import HookBase
 
 
 class Hook(HookBase):
@@ -10,4 +10,4 @@ class Hook(HookBase):
     def execute_hook(self):
         self._logger.debug(f"Running Bash Hook: {self._arguments}")
         if not self._subproc.run_command_exit_code(f"sh {self._arguments}") == 0:
-            raise Exception(f"Bash Hook Retuned non 0 result ({self._arguments})")
+            raise Exception(f"Bash Hook Returned non 0 result ({self._arguments})")

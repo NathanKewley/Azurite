@@ -1,7 +1,7 @@
 {
-    "id": "/subscriptions/26e348d8-f84d-41ec-9c5f-3c866bbc0e58/resourceGroups/rg-lolite-test-01/providers/Microsoft.Resources/deployments/lolite-test.rg-lolite-test-01.lolite_automation_storage",
+    "id": "/subscriptions/26e348d8-f84d-41ec-9c5f-3c866bbc0e58/resourceGroups/rg-azurite-sample-01/providers/Microsoft.Resources/deployments/azurite-sample.rg-azurite-sample-01.azurite_automation_storage",
     "location": null,
-    "name": "lolite-test.rg-lolite-test-01.lolite_automation_storage",
+    "name": "azurite-sample.rg-azurite-sample-01.azurite_automation_storage",
     "properties": {
       "correlationId": "367fe038-eabd-4535-9be9-ba443032ecbf",
       "debugSetting": null,
@@ -9,15 +9,15 @@
         {
           "dependsOn": [
             {
-              "id": "/subscriptions/26e348d8-f84d-41ec-9c5f-3c866bbc0e58/resourceGroups/rg-lolite-test-01/providers/Microsoft.Storage/storageAccounts/lolitestorekew",
-              "resourceGroup": "rg-lolite-test-01",
-              "resourceName": "lolitestorekew",
+              "id": "/subscriptions/26e348d8-f84d-41ec-9c5f-3c866bbc0e58/resourceGroups/rg-azurite-sample-01/providers/Microsoft.Storage/storageAccounts/azurisampleorekew",
+              "resourceGroup": "rg-azurite-sample-01",
+              "resourceName": "azurisamplestorekew",
               "resourceType": "Microsoft.Storage/storageAccounts"
             }
           ],
-          "id": "/subscriptions/26e348d8-f84d-41ec-9c5f-3c866bbc0e58/resourceGroups/rg-lolite-test-01/providers/Microsoft.Storage/storageAccounts/lolitestorekew/blobServices/default/containers/loliteautomation",
-          "resourceGroup": "rg-lolite-test-01",
-          "resourceName": "lolitestorekew/default/loliteautomation",
+          "id": "/subscriptions/26e348d8-f84d-41ec-9c5f-3c866bbc0e58/resourceGroups/rg-azurite-sample-01/providers/Microsoft.Storage/storageAccounts/azurisampleorekew/blobServices/default/containers/azuriteautomation",
+          "resourceGroup": "rg-azurite-sample-01",
+          "resourceName": "azurisamplestorekew/default/azuriteautomation",
           "resourceType": "Microsoft.Storage/storageAccounts/blobServices/containers"
         }
       ],
@@ -27,22 +27,22 @@
       "onErrorDeployment": null,
       "outputResources": [
         {
-          "id": "/subscriptions/26e348d8-f84d-41ec-9c5f-3c866bbc0e58/resourceGroups/rg-lolite-test-01/providers/Microsoft.Storage/storageAccounts/lolitestorekew",
-          "resourceGroup": "rg-lolite-test-01"
+          "id": "/subscriptions/26e348d8-f84d-41ec-9c5f-3c866bbc0e58/resourceGroups/rg-azurite-sample-01/providers/Microsoft.Storage/storageAccounts/azurisampleorekew",
+          "resourceGroup": "rg-azurite-sample-01"
         },
         {
-          "id": "/subscriptions/26e348d8-f84d-41ec-9c5f-3c866bbc0e58/resourceGroups/rg-lolite-test-01/providers/Microsoft.Storage/storageAccounts/lolitestorekew/blobServices/default/containers/loliteautomation",
-          "resourceGroup": "rg-lolite-test-01"
+          "id": "/subscriptions/26e348d8-f84d-41ec-9c5f-3c866bbc0e58/resourceGroups/rg-azurite-sample-01/providers/Microsoft.Storage/storageAccounts/azurisampleorekew/blobServices/default/containers/azuriteautomation",
+          "resourceGroup": "rg-azurite-sample-01"
         }
       ],
       "outputs": {
         "storageEndpoint": {
           "type": "Object",
           "value": {
-            "blob": "https://lolitestorekew.blob.core.windows.net/",
-            "file": "https://lolitestorekew.file.core.windows.net/",
-            "queue": "https://lolitestorekew.queue.core.windows.net/",
-            "table": "https://lolitestorekew.table.core.windows.net/"
+            "blob": "https://azurisampleorekew.blob.core.windows.net/",
+            "file": "https://azurisampleorekew.file.core.windows.net/",
+            "queue": "https://azurisampleorekew.queue.core.windows.net/",
+            "table": "https://azurisampleorekew.table.core.windows.net/"
           }
         },
         "storageLocation": {
@@ -53,7 +53,7 @@
       "parameters": {
         "containerName": {
           "type": "String",
-          "value": "loliteautomation"
+          "value": "azuriteautomation"
         },
         "location": {
           "type": "String",
@@ -65,7 +65,7 @@
         },
         "storageName": {
           "type": "String",
-          "value": "lolitestorekew"
+          "value": "azurisampleorekew"
         }
       },
       "parametersLink": null,
@@ -111,7 +111,7 @@
       "timestamp": "2021-05-01T03:21:15.146105+00:00",
       "validatedResources": null
     },
-    "resourceGroup": "rg-lolite-test-01",
+    "resourceGroup": "rg-azurite-sample-01",
     "tags": null,
     "type": "Microsoft.Resources/deployments"
 }  

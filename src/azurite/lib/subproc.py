@@ -1,7 +1,7 @@
 import subprocess
 import sys
 
-from lolite.lib.logger import Logger as logger
+from azurite.lib.logger import Logger as logger
 
 class Subproc():
 
@@ -29,8 +29,7 @@ class Subproc():
     def create_resource_group(self, resource_group, location):
         self.logger.info(f"Creating resource group: '{resource_group}' in {location}")
         azure_cli_command = f"az group create --location {location} --name {resource_group} --output json"
-        self.run_command(azure_cli_command)
-        return      
+        self.run_command(azure_cli_command)     
 
     def deploy_group_create(self, bicep, resource_group, deployment_name, parameters):
         azure_cli_command = f"az deployment group create -f bicep/{bicep} -g {resource_group} --mode Incremental --name {deployment_name} --parameters {parameters} --output json"
