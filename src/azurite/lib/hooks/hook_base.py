@@ -1,4 +1,4 @@
-from lolite.lib.subproc import Subproc
+from azurite.lib.subproc import Subproc
 
 class HookBase():
 

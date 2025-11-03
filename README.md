@@ -1,14 +1,17 @@
-# lolite
+# Azurite
 
-lolite is an Azure Bicep orchestration tool. The main goal is to separate environment configuration from templates. This is inspired by the AWS Sceptre tool.
+Azurite is an Azure Bicep orchestration tool. The main goal is to separate environment configuration from templates. This is inspired by the AWS Sceptre tool.
 
-`NOTE: lolite is still very much a WIP.`
+This is old and needs to be updated:
+Move this to github wiki.
 
-There is a getting started guide on my blog [here](https://nathan.kewley.me/2021-04-20-orchestrate-azure-bicep-deploys-with-lolite/). This is meant to be complementry to the info in this Readme.
+```
+There is a getting started guide on the Kubiieo blog [here](https://nathan.kewley.me/2021-04-20-orchestrate-azure-bicep-deploys-with-Azurite/). This is meant to be complementary to the info in this Readme.
 
-[deploy with github actions](https://nathan.kewley.me/2021-05-29-deploy-to-azure-using-lolite-and-github-actions/)
+[deploy with github actions](https://nathan.kewley.me/2021-05-29-deploy-to-azure-using-Azurite-and-github-actions/)
 
-[lolite sample project](https://github.com/NathanKewley/lolite-sample-project)
+[Azurite sample project](https://github.com/NathanKewley/azurite-sample-project)
+```
 
 ## Goals
 
@@ -29,17 +32,12 @@ There is a getting started guide on my blog [here](https://nathan.kewley.me/2021
 * Azure CLI
 * Azure Bicep CLI
 
-Note: `tested on MacOS, Linux (Ubuntu) and WSL under Windows.`
-
-## Installing
-
-You can install lolite from pypi using: `pip install lolite==0.0.1`
-
 ## Building From Source
 
 * Clone this repo
+* Install requirements `pip3 install -r requirements.txt`
 * Build the project `python3 -m build`
-* Install `pip3 install dist/lolite-0.0.1-py3-none-any.whl`
+* Install `pip3 install dist/Azurite-0.0.4-py3-none-any.whl`
 
 ## Assumptions
 
@@ -49,12 +47,14 @@ You can install lolite from pypi using: `pip install lolite==0.0.1`
 
 ## Possible Future Features
 
+* Destroy command
+* Investigate Bicep Module support
 * Parallel deploys
 * configurable deploy mode
 
-## lolite project structure
+## Azurite project structure
 
-A lolite project is structured in the following way:
+A Azurite project is structured in the following way:
 
 ```
 - root/
@@ -135,7 +135,7 @@ pre_hooks:
   PythonScript: scripts/test_python_hook.py
 
 params:
-  storageName: storagetestlolit1
+  storageName: storagesampleazurite1
   containerName: blog
   skuName: Standard_LRS
   location: Ref:Subscription_1.Resource_Group_1.config2:storageLocation
@@ -149,20 +149,20 @@ The `bicep_path` here points to the template in the `bicep/` folder of the proje
 
 `scope` is an optional parameter, where the default value is not specified is `resource_group`. The other valid value is `subscription`. This sets the deployment at a subscription scope rather than a resource group scope. This is particularly useful for setting up `Azure Policy`.
 
-`pre_hooks` and `post_hooks` allow you to specify external scripts that should be run before or after the bicep deplloyment respectivly. If A hook returns a non-success code deployment will be terminated. At current there is only support for `Python3` scripts and `Bash` scripts. `pre_commit` and `post_commit` Hooks are both optional optional.
+`pre_hooks` and `post_hooks` allow you to specify external scripts that should be run before or after the bicep deployment respectively. If A hook returns a non-success code deployment will be terminated. At current there is only support for `Python3` scripts and `Bash` scripts. `pre_commit` and `post_commit` Hooks are both optional optional.
 
 #### Referencing Other Deployment Outputs
 
 Any parameter in the config file prefixes with `Ref:` is a reference to an output from a different deployment. The format for referencing an output from a different deployment is:
-`<Ref>:<deployment_path>:<output_name>` where the `deployent_path` replaces `/` with `.`.
+`<Ref>:<deployment_path>:<output_name>` where the `deployment_path` replaces `/` with `.`.
 
-When referencing the output from a different deployment lolite will first check if the dependent deployment exists then deploy it if required. If the dependent deployment does exist lolite will look up the output value and use it for the deployment. deployment hierarchy can be of an arbitrary depth and span across the whole project.
+When referencing the output from a different deployment Azurite will first check if the dependent deployment exists then deploy it if required. If the dependent deployment does exist Azurite will look up the output value and use it for the deployment. deployment hierarchy can be of an arbitrary depth and span across the whole project.
 
-If the resource group for a deployment does not exist lolite will create it for you using the location specified by the `location.yaml` file.
+If the resource group for a deployment does not exist Azurite will create it for you using the location specified by the `location.yaml` file.
 
 ### location.yaml
 
-This is a super simple file that is required for every resource group. It tells lolite what location to create the resource group in if it does not exist. Each resource deployed into that resource group inherits the location. An example of a location.yaml:
+This is a super simple file that is required for every resource group. It tells Azurite what location to create the resource group in if it does not exist. Each resource deployed into that resource group inherits the location. An example of a location.yaml:
 
 ```
 ---
@@ -172,13 +172,13 @@ location: australiaeast
 
 ## Usage
 
-lolite is designed to be easy to use and allow scoped control of deployments.
+Azurite is designed to be easy to use and allow scoped control of deployments.
 
 ### Deploying a single configuration
 
 From the root folder of your repository run the following command:
 
-`lolite deploy Subscription_1/Resource_Group_1/storage_account_and_container.yaml`
+`Azurite deploy Subscription_1/Resource_Group_1/storage_account_and_container.yaml`
 
 This will deploy a single configuration / template
 
@@ -186,7 +186,7 @@ This will deploy a single configuration / template
 
 From the root folder of your repository run the following command:
 
-`lolite deploy-resource-group Subscription_1/Resource_Group_1`
+`Azurite deploy-resource-group Subscription_1/Resource_Group_1`
 
 This will deploy every configuration file under that resource group
 
@@ -194,7 +194,7 @@ This will deploy every configuration file under that resource group
 
 From the root folder of your repository run the following command:
 
-`lolite deploy-subscription Subscription_1`
+`Azurite deploy-subscription Subscription_1`
 
 This will deploy each configuration file for each resource group in the specified subscription
 
@@ -202,6 +202,10 @@ This will deploy each configuration file for each resource group in the specifie
 
 From the root folder of your repository run the following command:
 
-`lolite deploy-account`
+`Azurite deploy-account`
 
 This will deploy every configuration file in the project to the appropriate subscriptions and resource groups
+
+```
+
+Still Sane Engineer?
