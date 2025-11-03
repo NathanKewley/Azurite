@@ -3,6 +3,7 @@
 Azurite is an Azure Bicep orchestration tool. The main goal is to separate environment configuration from templates. This is inspired by the AWS Sceptre tool.
 
 This is old and needs to be updated:
+Move this to github wiki.
 
 ```
 There is a getting started guide on the Kubiieo blog [here](https://nathan.kewley.me/2021-04-20-orchestrate-azure-bicep-deploys-with-Azurite/). This is meant to be complementary to the info in this Readme.
@@ -46,6 +47,8 @@ There is a getting started guide on the Kubiieo blog [here](https://nathan.kewle
 
 ## Possible Future Features
 
+* Destroy command
+* Investigate Bicep Module support
 * Parallel deploys
 * configurable deploy mode
 
