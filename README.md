@@ -2,16 +2,7 @@
 
 Azurite is an Azure Bicep orchestration tool. The main goal is to separate environment configuration from templates. This is inspired by the AWS Sceptre tool.
 
-This is old and needs to be updated:
-Move this to github wiki.
-
-```
-There is a getting started guide on the Kubiieo blog [here](https://nathan.kewley.me/2021-04-20-orchestrate-azure-bicep-deploys-with-Azurite/). This is meant to be complementary to the info in this Readme.
-
-[deploy with github actions](https://nathan.kewley.me/2021-05-29-deploy-to-azure-using-Azurite-and-github-actions/)
-
-[Azurite sample project](https://github.com/NathanKewley/azurite-sample-project)
-```
+There is some additional getting started info in the [wiki](https://github.com/NathanKewley/Azurite/wiki)
 
 ## Goals
 
@@ -205,7 +196,3 @@ From the root folder of your repository run the following command:
 `Azurite deploy-account`
 
 This will deploy every configuration file in the project to the appropriate subscriptions and resource groups
-
-```
-
-Still Sane Engineer?
