@@ -61,7 +61,7 @@ class Orchestrator():
         self.subscription.set_subscription(parameter_subscription)
         if not self.get_deployment(deployment_name, resource_group):
             deployment_config_path = deployment_name.replace(".","/") + ".yaml"
-            self.logger.info("Deployment has dependancies. Resolving...")
+            self.logger.info("Deployment has dependencies. Resolving...")
             self.deploy(deployment_config_path)
         self.subscription.set_subscription(subscription)
 

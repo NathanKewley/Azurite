@@ -11,7 +11,8 @@ class Subscription():
         self.subproc = subproc
 
     def check_if_current(self, subscription_name):
-        if subscription_name in self.subproc.get_current_subscription():
+        subscription = json.loads(self.subproc.get_current_subscription())
+        if subscription_name == subscription["name"]:
             return True
         return False
 

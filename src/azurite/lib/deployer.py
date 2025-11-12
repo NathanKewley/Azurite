@@ -58,6 +58,8 @@ class Deployer():
             self.create_resource_group(resource_group, location)
         
         self.logger.debug(f"Deployment Name: {deployment_name}")
+        self.logger.debug(f"Deployment Subscription: {subscription}")
+        self.logger.debug(f"Deployment Resource Group: {resource_group}")
         parameters = self.build_param_string(params, subscription)
         deploy_result = self.subproc.deploy_group_create(bicep, resource_group, deployment_name, parameters)
         if "\"provisioningState\": \"Succeeded\"" in deploy_result:
@@ -67,8 +69,10 @@ class Deployer():
         exit()
 
     def deploy_bicep_subscription(self, params, bicep, location, deployment_name, subscription):
-        self.subscription.set_subscription(subscription)       
+        self.subscription.set_subscription(subscription) 
+              
         self.logger.debug(f"Deployment Name: {deployment_name}")
+        self.logger.debug(f"Deployment Subscription: {subscription}")        
         parameters = self.build_param_string(params, subscription)
         deploy_result = self.subproc.deploy_subscription_create(bicep, deployment_name, parameters, location)
         if "\"provisioningState\": \"Succeeded\"" in deploy_result:
