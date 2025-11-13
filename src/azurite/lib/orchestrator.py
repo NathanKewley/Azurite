@@ -95,7 +95,7 @@ class Orchestrator():
                 else:
                     self.deployer.deploy_bicep(config['params'], config['bicep_path'], resource_group, location, deployment_name, subscription)
 
-                # Run pre-delpoy hooks
+                # Run post-delpoy hooks
                 if 'post_hooks' in config.keys():
                     self.hook_orchestrator.run_hooks(config['post_hooks'])
             else:
@@ -139,3 +139,30 @@ class Orchestrator():
                 test_results.append(subscription)
         if dry_run:
             return test_results                        
+
+    # No need to check dependant stacks in this case?
+    # Do we need to do an ordered destroy of all dependant stack?
+    # Or will destroy always work?
+    def destroy(self, configuration, dry_run=False):
+        config = self.load_config(configuration)
+        location = self.load_location(configuration)
+        deployment_name = self.get_deployment_name(configuration)
+        subscription = self.get_subscription(configuration)
+        resource_group = self.get_resource_group(configuration)        
+
+        self.logger.info(f"Destroying: {configuration} from {subscription}")
+        if not dry_run:
+            # No pre or post hooks supported for destroy
+            # Could look at supporting specific hooks for destroy events
+
+            # Run main deployment
+            if 'scope' in config:
+                if config['scope'] == 'subscription':
+                    self.deployer.destroy_bicep_subscription(deployment_name, subscription)   
+                if config['scope'] == 'resource_group':     
+                    self.deployer.destroy_bicep(resource_group, deployment_name, subscription)
+            else:
+                self.deployer.destroy_bicep(resource_group, deployment_name, subscription)
+
+        else:
+            return [config['bicep_path'], resource_group, deployment_name, subscription]

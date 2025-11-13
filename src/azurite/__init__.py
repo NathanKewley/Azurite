@@ -16,8 +16,9 @@ def _parse_args():
         - deploy-resource-group: deploy all config in a specific resource group
         - deploy-subscription: deploy all config in a specific subscription
         - deploy-account: deploy all config in the account / azurite project
+        - destroy: destroy a single configuration
         see GitHub for more details: https://github.com/NathanKewley/azurite """)
-    parser.add_argument('operation', nargs=1, help=argparse.SUPPRESS, choices=[ "deploy", "deploy-resource-group", "deploy-subscription", "deploy-account"], metavar="operation")
+    parser.add_argument('operation', nargs=1, help=argparse.SUPPRESS, choices=[ "deploy", "deploy-resource-group", "deploy-subscription", "deploy-account", "destroy"], metavar="operation")
     parser.add_argument('suboperation', nargs='?', default=None, help=argparse.SUPPRESS)
     args = parser.parse_args()
     args.operation[0] = args.operation[0].replace("-", "_")
