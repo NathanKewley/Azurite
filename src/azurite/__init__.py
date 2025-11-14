@@ -26,10 +26,10 @@ def _parse_args():
 def azurite():
     args = _parse_args()
     logger.debug(args)
-    # try:
-    if args.suboperation is None:
-        getattr(orchestrator, f"{args.operation[0]}")()
-    else:
-        getattr(orchestrator, f"{args.operation[0]}")(args.suboperation)
-    # except Exception as e:
-    #     logger.error(e)
+    try:
+        if args.suboperation is None:
+            getattr(orchestrator, f"{args.operation[0]}")()
+        else:
+            getattr(orchestrator, f"{args.operation[0]}")(args.suboperation)
+    except Exception as e:
+        logger.error(e)
