@@ -1,5 +1,4 @@
 import json
-import os
 
 from azurite.lib.logger import Logger as logger
 from azurite.lib.subscription import Subscription
@@ -100,16 +99,14 @@ class Deployer():
         self.logger.error(f"DESTROY FAILED: {destroy_result}")
         exit()
 
-    def destroy_bicep_subscription(self, bicep, location, deployment_name, subscription, action_on_unmanage):
-        self.logger.error(f"DESTROY NOT YET IMPLEMENTED AT SUBSCRIPTION SCOPE")
-        exit()
-        # self.subscription.set_subscription(subscription) 
+    def destroy_bicep_subscription(self, deployment_name, subscription, action_on_unmanage):
+        self.subscription.set_subscription(subscription) 
               
-        # self.logger.debug(f"Deployment Name: {deployment_name}")
-        # self.logger.debug(f"Deployment Subscription: {subscription}")        
-        # deploy_result = self.subproc.deploy_subscription_create(bicep, deployment_name, parameters, location)
-        # if "\"provisioningState\": \"Succeeded\"" in deploy_result:
-        #     self.logger.debug("Deploy Complete\n")
-        #     return
-        # self.logger.error(f"DEPLOYMENT FAILED: {deploy_result}")
-        # exit()
+        self.logger.debug(f"Destroy:  Name: {deployment_name}")
+        self.logger.debug(f"Destroy:  Subscription: {subscription}")        
+        destroy_result = self.subproc.deploy_subscription_destroy(deployment_name, action_on_unmanage)
+        if not "ERROR" in destroy_result:
+            self.logger.info("Destroy Complete\n")
+            return
+        self.logger.error(f"DESTROY FAILED: {destroy_result}")
+        exit()
