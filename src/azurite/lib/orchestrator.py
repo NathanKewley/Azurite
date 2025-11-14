@@ -106,7 +106,7 @@ class Orchestrator():
                 else:
                     self.deployer.deploy_bicep(config['params'], config['bicep_path'], resource_group, location, deployment_name, action_on_unmanage, deny_settings_mode, subscription)
 
-                # Run pre-delpoy hooks
+                # Run post-delpoy hooks
                 if 'post_hooks' in config.keys():
                     self.hook_orchestrator.run_hooks(config['post_hooks'])
             else:
@@ -150,3 +150,71 @@ class Orchestrator():
                 test_results.append(subscription)
         if dry_run:
             return test_results                        
+
+    def destroy(self, configuration, dry_run=False):
+        config = self.load_config(configuration)
+        location = self.load_location(configuration)
+        deployment_name = self.get_deployment_name(configuration)
+        subscription = self.get_subscription(configuration)
+        resource_group = self.get_resource_group(configuration)        
+
+        # Configuration Settings with defaults
+        if "action_on_unmanage" in config.keys():
+            action_on_unmanage = config["action_on_unmanage"]
+        else:
+            action_on_unmanage = "deleteResources"
+
+        self.logger.info(f"Destroying: {configuration} from {subscription}")
+        if not dry_run:
+            # No pre or post hooks supported for destroy
+            # Could look at supporting specific hooks for destroy events
+
+            # Run main deployment
+            if 'scope' in config:
+                if config['scope'] == 'subscription':
+                    self.deployer.destroy_bicep_subscription(deployment_name, subscription, action_on_unmanage)   
+                if config['scope'] == 'resource_group':     
+                    self.deployer.destroy_bicep(resource_group, deployment_name, subscription, action_on_unmanage)
+            else:
+                self.deployer.destroy_bicep(resource_group, deployment_name, subscription, action_on_unmanage)
+
+        else:
+            return [config['bicep_path'], resource_group, deployment_name, subscription]
+
+    def destroy_resource_group(self, configuration, dry_run=False):
+        test_results = []
+
+        subscription = self.get_subscription(configuration)
+        resource_group = self.get_resource_group(configuration)
+        deployments = self.get_child_items(f"configuration/{configuration}/")
+        for deployment in deployments:
+            if deployment != "location.yaml":
+                if not dry_run:
+                    self.destroy(f"{subscription}/{resource_group}/{deployment}")
+                else:
+                    test_results.append(f"{subscription}/{resource_group}/{deployment}")
+        if dry_run:
+            return test_results
+
+    def destroy_subscription(self, configuration, dry_run=False):
+        test_results = []
+        resource_groups = self.get_child_items(f"configuration/{configuration}/")
+        for resource_group in resource_groups:
+            if not dry_run:
+                self.destroy_resource_group(f"{configuration}/{resource_group}")
+            else:
+                test_results.append(f"{configuration}/{resource_group}")
+        if dry_run:
+            return test_results                
+
+    def destroy_account(self, dry_run=False):
+        test_results = []
+        subscriptions = self.get_child_items("configuration/")
+        for subscription in subscriptions:
+            if not dry_run:
+                self.destroy_subscription(subscription)
+            else:
+                test_results.append(subscription)
+        if dry_run:
+            return test_results  
+        

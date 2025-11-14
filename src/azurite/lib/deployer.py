@@ -63,7 +63,7 @@ class Deployer():
         parameters = self.build_param_string(params, subscription)
         deploy_result = self.subproc.deploy_group_create(bicep, resource_group, deployment_name, action_on_unmanage, deny_settings_mode, parameters)
         if "\"error\": null" in deploy_result:            
-            self.logger.debug("Deploy Complete\n")
+            self.logger.info("Deploy Complete\n")
             return
         self.logger.error(f"DEPLOYMENT FAILED: {deploy_result}")
         exit()
@@ -76,7 +76,37 @@ class Deployer():
         parameters = self.build_param_string(params, subscription)
         deploy_result = self.subproc.deploy_subscription_create(bicep, deployment_name, action_on_unmanage, deny_settings_mode, parameters, location)
         if "\"error\": null" in deploy_result:            
-            self.logger.debug("Deploy Complete\n")
+            self.logger.info("Deploy Complete\n")
             return
         self.logger.error(f"DEPLOYMENT FAILED: {deploy_result}")
+        exit()
+
+    def destroy_bicep(self, resource_group, deployment_name, subscription, action_on_unmanage):
+        self.subscription.set_subscription(subscription)  
+        if not self.resource_group_exists(resource_group):
+            self.logger.error(f"Destroy Failed: Resource Group Not Found: {resource_group}")
+            exit()
+        
+        self.logger.debug(f"Destroy: Deployment Name: {deployment_name}")
+        self.logger.debug(f"Destroy: Deployment Subscription: {subscription}")
+        self.logger.debug(f"Destroy: Deployment Resource Group: {resource_group}")
+
+        # Now we can destroy the deployment group
+        destroy_result = self.subproc.deploy_group_destroy(resource_group, deployment_name, action_on_unmanage)
+        if not "ERROR" in destroy_result:
+            self.logger.info("Destroy Complete\n")
+            return
+        self.logger.error(f"DESTROY FAILED: {destroy_result}")
+        exit()
+
+    def destroy_bicep_subscription(self, deployment_name, subscription, action_on_unmanage):
+        self.subscription.set_subscription(subscription) 
+              
+        self.logger.debug(f"Destroy:  Name: {deployment_name}")
+        self.logger.debug(f"Destroy:  Subscription: {subscription}")        
+        destroy_result = self.subproc.deploy_subscription_destroy(deployment_name, action_on_unmanage)
+        if not "ERROR" in destroy_result:
+            self.logger.info("Destroy Complete\n")
+            return
+        self.logger.error(f"DESTROY FAILED: {destroy_result}")
         exit()

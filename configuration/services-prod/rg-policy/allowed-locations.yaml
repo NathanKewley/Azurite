@@ -1,0 +1,9 @@
+---
+bicep_path: policy/assignAllowedLocations.bicep
+scope: subscription
+
+params:
+  policyDisplayName: allowed-locations
+  policyAssignmentName: allowed_locations
+  enforcementMode: Default
+  allowedLocations: "['australiaeast','australiasoutheast']"
