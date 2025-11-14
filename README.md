@@ -7,10 +7,10 @@ There is some additional getting started info in the [wiki](https://github.com/N
 ## Goals
 
 * Separation of Bicep configuration and templates
-* Deploy individual configurations
-* Bulk deploy at different hierarchies: Resource Group, Subscription or Account
 * Automated Resource Group Creation
-* Automated deployment hierarchy based on output bindings.
+* Deploy individual configurations or bulk configurations at different scopes: Resource Group, Subscription or Account
+* Deploy output and input chaining
+* Automated deployment hierarchy based on output bindings
 
 ## Not Goals
 
@@ -37,9 +37,8 @@ There is some additional getting started info in the [wiki](https://github.com/N
 
 ## Possible Future Features
 
-* Destroy command
 * Investigate Bicep Module support
-* Parallel deploys
+* Deploy Azure Policy at MG Level
 
 ## Azurite project structure
 
@@ -167,7 +166,7 @@ location: australiaeast
 
 ```
 
-## Usage
+## Usage - Deploying
 
 Azurite is designed to be easy to use and allow scoped control of deployments.
 
@@ -202,3 +201,29 @@ From the root folder of your repository run the following command:
 `Azurite deploy-account`
 
 This will deploy every configuration file in the project to the appropriate subscriptions and resource groups
+
+## Usage - Destroying
+
+Azurite is designed to be easy to use and allow scoped control of stack destroys.
+
+Destroy will never destroy resource groups. (Should it?)
+
+The scope of these commands is the same as the deploy commands
+
+Destroy will not build a hierarchy of inputs and outputs. It will just destroy sequentially.
+
+### Destroy a single configuration
+
+`Azurite destroy Subscription_1/Resource_Group_1/storage_account_and_container.yaml`
+
+### Destroying at resource group scope
+
+`Azurite destroy-resource-group Subscription_1/Resource_Group_1`
+
+### Destroying at subscription scope
+
+`Azurite destroy-subscription Subscription_1`
+
+### Destroying at account scope
+
+`Azurite destroy-account`

@@ -32,18 +32,12 @@ class Subproc():
         self.run_command(azure_cli_command)     
 
     def deploy_group_create(self, bicep, resource_group, deployment_name, action_on_unmanage, deny_settings_mode, parameters):
-        azure_cli_command = f"az stack group create -f bicep/{bicep} -g {resource_group} --name {deployment_name} --action-on-unmanage {action_on_unmanage} --deny-settings-mode {deny_settings_mode} --parameters {parameters} --output json"
+        azure_cli_command = f"az stack group create -f bicep/{bicep} -g {resource_group} --name {deployment_name} --action-on-unmanage {action_on_unmanage} --deny-settings-mode {deny_settings_mode} --parameters {parameters} --yes --output json"
         self.logger.debug(f"command: {azure_cli_command}")
-        return self.run_command(azure_cli_command)  
+        return self.run_command(azure_cli_command)       
 
-    def deploy_group_empty(self, bicep, resource_group, deployment_name):
-        azure_cli_command = f"az deployment group create -f bicep/{bicep} -g {resource_group} --mode Complete --name {deployment_name} --output json"
-        self.logger.debug(f"command: {azure_cli_command}")
-        return self.run_command(azure_cli_command)        
-
-    # destroy_result = self.subproc.deploy_group_destroy(bicep, resource_group, deployment_name)    
-    def deploy_group_destroy(self, resource_group, deployment_name):
-        azure_cli_command = f"az deployment group delete -g {resource_group} --name {deployment_name} --verbose --output json"
+    def deploy_group_destroy(self, resource_group, deployment_name, action_on_unmanage):
+        azure_cli_command = f"az stack group delete -g {resource_group} --name {deployment_name} --action-on-unmanage {action_on_unmanage} --yes --verbose --output json"
         self.logger.debug(f"command: {azure_cli_command}")
         return self.run_command(azure_cli_command)        
 

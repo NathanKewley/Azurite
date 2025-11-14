@@ -161,6 +161,12 @@ class Orchestrator():
         subscription = self.get_subscription(configuration)
         resource_group = self.get_resource_group(configuration)        
 
+        # Configuration Settings with defaults
+        if "action_on_unmanage" in config.keys():
+            action_on_unmanage = config["action_on_unmanage"]
+        else:
+            action_on_unmanage = "deleteResources"
+
         self.logger.info(f"Destroying: {configuration} from {subscription}")
         if not dry_run:
             # No pre or post hooks supported for destroy
@@ -169,11 +175,11 @@ class Orchestrator():
             # Run main deployment
             if 'scope' in config:
                 if config['scope'] == 'subscription':
-                    self.deployer.destroy_bicep_subscription(deployment_name, subscription)   
+                    self.deployer.destroy_bicep_subscription(deployment_name, subscription, action_on_unmanage)   
                 if config['scope'] == 'resource_group':     
-                    self.deployer.destroy_bicep(resource_group, deployment_name, subscription)
+                    self.deployer.destroy_bicep(resource_group, deployment_name, subscription, action_on_unmanage)
             else:
-                self.deployer.destroy_bicep(resource_group, deployment_name, subscription)
+                self.deployer.destroy_bicep(resource_group, deployment_name, subscription, action_on_unmanage)
 
         else:
             return [config['bicep_path'], resource_group, deployment_name, subscription]

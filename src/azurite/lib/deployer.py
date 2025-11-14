@@ -64,7 +64,7 @@ class Deployer():
         parameters = self.build_param_string(params, subscription)
         deploy_result = self.subproc.deploy_group_create(bicep, resource_group, deployment_name, action_on_unmanage, deny_settings_mode, parameters)
         if "\"error\": null" in deploy_result:            
-            self.logger.debug("Deploy Complete\n")
+            self.logger.info("Deploy Complete\n")
             return
         self.logger.error(f"DEPLOYMENT FAILED: {deploy_result}")
         exit()
@@ -77,12 +77,12 @@ class Deployer():
         parameters = self.build_param_string(params, subscription)
         deploy_result = self.subproc.deploy_subscription_create(bicep, deployment_name, action_on_unmanage, deny_settings_mode, parameters, location)
         if "\"error\": null" in deploy_result:            
-            self.logger.debug("Deploy Complete\n")
+            self.logger.info("Deploy Complete\n")
             return
         self.logger.error(f"DEPLOYMENT FAILED: {deploy_result}")
         exit()
 
-    def destroy_bicep(self, resource_group, deployment_name, subscription):
+    def destroy_bicep(self, resource_group, deployment_name, subscription, action_on_unmanage):
         self.subscription.set_subscription(subscription)  
         if not self.resource_group_exists(resource_group):
             self.logger.error(f"Destroy Failed: Resource Group Not Found: {resource_group}")
@@ -92,26 +92,15 @@ class Deployer():
         self.logger.debug(f"Destroy: Deployment Subscription: {subscription}")
         self.logger.debug(f"Destroy: Deployment Resource Group: {resource_group}")
 
-        # Since destroying a deployment group only removes metadata and not the resources deployed (why?)
-        # We need to create a new deployment in --complete mode from an empty bicep file to delete the deployed resources
-        # We need to create a temp empty bicep file for this
-        # LOL well --complete destroys the whole RG. Cant see any good way to do this currently.
-        with open("bicep/temp_empty_deployment.bicep", 'w') as f:
-            pass
-        deploy_result = self.subproc.deploy_group_empty("temp_empty_deployment.bicep", resource_group, deployment_name)
-        if not "\"provisioningState\": \"Succeeded\"" in deploy_result:
-            self.logger.error(f"DESTROY FAILED: Unable to destroy resources: {deploy_result}")
-        os.remove("bicep/temp_empty_deployment.bicep")
-
         # Now we can destroy the deployment group
-        destroy_result = self.subproc.deploy_group_destroy(resource_group, deployment_name)
-        if destroy_result == "":
-            self.logger.debug("Destroy Complete\n")
+        destroy_result = self.subproc.deploy_group_destroy(resource_group, deployment_name, action_on_unmanage)
+        if not "ERROR" in destroy_result:
+            self.logger.info("Destroy Complete\n")
             return
         self.logger.error(f"DESTROY FAILED: {destroy_result}")
         exit()
 
-    def destroy_bicep_subscription(self, bicep, location, deployment_name, subscription):
+    def destroy_bicep_subscription(self, bicep, location, deployment_name, subscription, action_on_unmanage):
         self.logger.error(f"DESTROY NOT YET IMPLEMENTED AT SUBSCRIPTION SCOPE")
         exit()
         # self.subscription.set_subscription(subscription) 
