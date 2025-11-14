@@ -60,10 +60,18 @@ class Orchestrator():
         parameter_subscription = value.split(":")[1].split(".")[0]
 
         self.subscription.set_subscription(parameter_subscription)
-        if not self.get_deployment(deployment_name, resource_group):
-            deployment_config_path = deployment_name.replace(".","/") + ".yaml"
-            self.logger.info("Deployment has dependencies. Resolving...")
-            self.deploy(deployment_config_path)
+        # if not self.get_deployment(deployment_name, resource_group):
+        #     deployment_config_path = deployment_name.replace(".","/") + ".yaml"
+        #     self.logger.info("Deployment has dependencies. Resolving...")
+        #     self.deploy(deployment_config_path)
+
+        # We are going to deploy regardless here as it will update existing deployments.
+        # If no changes then this still takes about 30 sec per stack so in undesirable.
+        # maybe we can convert the bicep to be deployed to ARM and call the existing deployment
+        # do a diff and only re-deploy if there are changes?
+        deployment_config_path = deployment_name.replace(".","/") + ".yaml"
+        self.logger.info("Deployment has dependencies. Resolving...")
+        self.deploy(deployment_config_path)        
         self.subscription.set_subscription(subscription)
 
     def deploy(self, configuration, dry_run=False):
