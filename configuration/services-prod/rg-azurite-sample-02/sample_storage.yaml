@@ -1,0 +1,13 @@
+---
+bicep_path: storage_account.bicep
+action_on_unmanage: deleteResources
+deny_settings_mode: None
+
+pre_hooks:
+  Python3Script: sample_python_hook.py
+
+params:
+  location: Ref:services-prod.rg-azurite-sample-01.azurite_automation_storage:storageLocation
+  storageName: azuritestorekewt
+  containerName: azuriteautomation
+  skuName: Standard_LRS
