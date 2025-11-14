@@ -151,9 +151,6 @@ class Orchestrator():
         if dry_run:
             return test_results                        
 
-    # No need to check dependant stacks in this case?
-    # Do we need to do an ordered destroy of all dependant stack?
-    # Or will destroy always work?
     def destroy(self, configuration, dry_run=False):
         config = self.load_config(configuration)
         location = self.load_location(configuration)
@@ -183,3 +180,41 @@ class Orchestrator():
 
         else:
             return [config['bicep_path'], resource_group, deployment_name, subscription]
+
+    def destroy_resource_group(self, configuration, dry_run=False):
+        test_results = []
+
+        subscription = self.get_subscription(configuration)
+        resource_group = self.get_resource_group(configuration)
+        deployments = self.get_child_items(f"configuration/{configuration}/")
+        for deployment in deployments:
+            if deployment != "location.yaml":
+                if not dry_run:
+                    self.destroy(f"{subscription}/{resource_group}/{deployment}")
+                else:
+                    test_results.append(f"{subscription}/{resource_group}/{deployment}")
+        if dry_run:
+            return test_results
+
+    def destroy_subscription(self, configuration, dry_run=False):
+        test_results = []
+        resource_groups = self.get_child_items(f"configuration/{configuration}/")
+        for resource_group in resource_groups:
+            if not dry_run:
+                self.destroy_resource_group(f"{configuration}/{resource_group}")
+            else:
+                test_results.append(f"{configuration}/{resource_group}")
+        if dry_run:
+            return test_results                
+
+    def destroy_account(self, dry_run=False):
+        test_results = []
+        subscriptions = self.get_child_items("configuration/")
+        for subscription in subscriptions:
+            if not dry_run:
+                self.destroy_subscription(subscription)
+            else:
+                test_results.append(subscription)
+        if dry_run:
+            return test_results  
+        

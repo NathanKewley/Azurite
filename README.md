@@ -206,7 +206,7 @@ This will deploy every configuration file in the project to the appropriate subs
 
 Azurite is designed to be easy to use and allow scoped control of stack destroys.
 
-Destroy will never destroy resource groups. (Should it?)
+Destroy will never destroy resource groups. This is because there could be resources in a resource group not managed by an Azurite stack and we don't want to delete those along with a resource group being deleted.
 
 The scope of these commands is the same as the deploy commands
 
