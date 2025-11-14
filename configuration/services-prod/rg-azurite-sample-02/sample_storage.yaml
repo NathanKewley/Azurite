@@ -1,5 +1,5 @@
 ---
-bicep_path: storage_account.bicep
+bicep_path: storage/storage_account.bicep
 action_on_unmanage: deleteResources
 deny_settings_mode: None
 

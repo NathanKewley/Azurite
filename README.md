@@ -37,7 +37,6 @@ There is some additional getting started info in the [wiki](https://github.com/N
 
 ## Possible Future Features
 
-* Investigate Bicep Module support
 * Deploy Azure Policy at MG Level
 
 ## Azurite project structure
