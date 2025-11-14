@@ -31,8 +31,8 @@ class Subproc():
         azure_cli_command = f"az group create --location {location} --name {resource_group} --output json"
         self.run_command(azure_cli_command)     
 
-    def deploy_group_create(self, bicep, resource_group, deployment_name, parameters):
-        azure_cli_command = f"az deployment group create -f bicep/{bicep} -g {resource_group} --mode Incremental --name {deployment_name} --parameters {parameters} --output json"
+    def deploy_group_create(self, bicep, resource_group, deployment_name, action_on_unmanage, deny_settings_mode, parameters):
+        azure_cli_command = f"az stack group create -f bicep/{bicep} -g {resource_group} --name {deployment_name} --action-on-unmanage {action_on_unmanage} --deny-settings-mode {deny_settings_mode} --parameters {parameters} --output json"
         self.logger.debug(f"command: {azure_cli_command}")
         return self.run_command(azure_cli_command)  
 
@@ -53,7 +53,7 @@ class Subproc():
         return self.run_command(azure_cli_command)    
 
     def get_deployment_output(self, deployment_name, resource_group, output_name):
-        azure_cli_command = f"az deployment group show --name {deployment_name} --resource-group {resource_group} --output json"
+        azure_cli_command = f"az stack group show --name {deployment_name} --resource-group {resource_group} --output json"
         self.logger.debug(f"Getting Deployment Output: {deployment_name}:{output_name}")
         self.logger.debug(f"Azure Command: {azure_cli_command}")
         return self.run_command(azure_cli_command)

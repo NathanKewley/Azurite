@@ -29,10 +29,10 @@ class Deployer():
         if "could not be found" in result:
             self.logger.error(f"DEPLOYMENT NOT FOUND: {deployment_name}")
             exit()
-        if not result["properties"]["outputs"][output_name]:
+        if not result["outputs"][output_name]:
             self.logger.error(f"Deployment output not found: {deployment_name}:{output_name}")
             exit()                            
-        return(result["properties"]["outputs"][output_name]["value"])
+        return(result["outputs"][output_name]["value"])
 
     def get_deployment_output_param(self, value, subscription):
         deployment_name = value.split(":")[1]
@@ -53,7 +53,7 @@ class Deployer():
             param_string = param_string + f"{param}={value} "
         return param_string[:-1]
 
-    def deploy_bicep(self, params, bicep, resource_group, location, deployment_name, subscription):
+    def deploy_bicep(self, params, bicep, resource_group, location, deployment_name, action_on_unmanage, deny_settings_mode, subscription):
         self.subscription.set_subscription(subscription)  
         if not self.resource_group_exists(resource_group):
             self.create_resource_group(resource_group, location)
@@ -62,21 +62,21 @@ class Deployer():
         self.logger.debug(f"Deployment Subscription: {subscription}")
         self.logger.debug(f"Deployment Resource Group: {resource_group}")
         parameters = self.build_param_string(params, subscription)
-        deploy_result = self.subproc.deploy_group_create(bicep, resource_group, deployment_name, parameters)
-        if "\"provisioningState\": \"Succeeded\"" in deploy_result:
+        deploy_result = self.subproc.deploy_group_create(bicep, resource_group, deployment_name, action_on_unmanage, deny_settings_mode, parameters)
+        if "\"error\": null" in deploy_result:            
             self.logger.debug("Deploy Complete\n")
             return
         self.logger.error(f"DEPLOYMENT FAILED: {deploy_result}")
         exit()
 
-    def deploy_bicep_subscription(self, params, bicep, location, deployment_name, subscription):
+    def deploy_bicep_subscription(self, params, bicep, location, deployment_name, action_on_unmanage, deny_settings_mode, subscription):
         self.subscription.set_subscription(subscription) 
               
         self.logger.debug(f"Deployment Name: {deployment_name}")
         self.logger.debug(f"Deployment Subscription: {subscription}")        
         parameters = self.build_param_string(params, subscription)
-        deploy_result = self.subproc.deploy_subscription_create(bicep, deployment_name, parameters, location)
-        if "\"provisioningState\": \"Succeeded\"" in deploy_result:
+        deploy_result = self.subproc.deploy_subscription_create(bicep, deployment_name, action_on_unmanage, deny_settings_mode, parameters, location)
+        if "\"error\": null" in deploy_result:            
             self.logger.debug("Deploy Complete\n")
             return
         self.logger.error(f"DEPLOYMENT FAILED: {deploy_result}")

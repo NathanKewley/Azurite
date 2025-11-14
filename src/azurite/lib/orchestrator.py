@@ -42,13 +42,14 @@ class Orchestrator():
             return(location['location'])
 
     def get_deployment(self, deployment_name, resource_group):
-        azure_cli_command = f"az deployment group show --name {deployment_name} --resource-group {resource_group}"
+        # This needs to move to subproc
+        azure_cli_command = f"az stack group show --name {deployment_name} --resource-group {resource_group}"
         result = ""
         try:
             result = self.subproc.run_command(azure_cli_command)
         except:
             self.logger.error(f"Error running: {azure_cli_command}")
-        if "\"provisioningState\": \"Succeeded\"" in result:
+        if "\"provisioningState\": \"succeeded\"" in result:
             return True
         return False
 
@@ -74,6 +75,16 @@ class Orchestrator():
             subscription = self.get_subscription(configuration)
             resource_group = self.get_resource_group(configuration)
 
+            # Configuration Settings with defaults
+            if "action_on_unmanage" in config.keys():
+                action_on_unmanage = config["action_on_unmanage"]
+            else:
+                action_on_unmanage = "deleteResources"
+            if "deny_settings_mode" in config.keys():
+                deny_settings_mode = config["deny_settings_mode"]
+            else:
+                deny_settings_mode = "None"
+
             # deploy dependant deployments before this one
             for param, value in config['params'].items():
                 if "Ref:" in value:
@@ -89,11 +100,11 @@ class Orchestrator():
                 # Run main deployment
                 if 'scope' in config:
                     if config['scope'] == 'subscription':
-                        self.deployer.deploy_bicep_subscription(config['params'], config['bicep_path'], location, deployment_name, subscription)   
+                        self.deployer.deploy_bicep_subscription(config['params'], config['bicep_path'], location, deployment_name, action_on_unmanage, deny_settings_mode, subscription)   
                     if config['scope'] == 'resource_group':     
-                        self.deployer.deploy_bicep(config['params'], config['bicep_path'], resource_group, location, deployment_name, subscription)
+                        self.deployer.deploy_bicep(config['params'], config['bicep_path'], resource_group, location, deployment_name, action_on_unmanage, deny_settings_mode, subscription)
                 else:
-                    self.deployer.deploy_bicep(config['params'], config['bicep_path'], resource_group, location, deployment_name, subscription)
+                    self.deployer.deploy_bicep(config['params'], config['bicep_path'], resource_group, location, deployment_name, action_on_unmanage, deny_settings_mode, subscription)
 
                 # Run post-delpoy hooks
                 if 'post_hooks' in config.keys():

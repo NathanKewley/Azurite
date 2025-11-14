@@ -32,16 +32,14 @@ There is some additional getting started info in the [wiki](https://github.com/N
 
 ## Assumptions
 
-* You have a single account with multiple subscriptions
+* You are working within a single Azure Tenancy
 * Each subscription has a unique name
-* All deployments are `--mode Incremental`
 
 ## Possible Future Features
 
 * Destroy command
 * Investigate Bicep Module support
 * Parallel deploys
-* configurable deploy mode
 
 ## Azurite project structure
 
@@ -64,6 +62,9 @@ A Azurite project is structured in the following way:
             - Resource_Group_1/
                 - location.yaml
                 - config_1.yaml
+    - scripts/
+        - script1.py
+        - script2.sh                
 ```
 
 Given the example structure above a few important things to note:
@@ -74,8 +75,9 @@ Given the example structure above a few important things to note:
 * `Resource_Group_1` - At the root level of a given subscription. This sets the resource group for a deployment within that subscription.
 * `location.yaml` - A special configuration file to set the location of the resource group.
 * `storage_account_and_container.yaml` - This is a deployable configuration. It will link to a template in the `bicep` folder and contain the required parameters.
+* `scripts` - Scripts folder for pre and post hooks. Python3 and bash scripts are supported.
 
-Sample `bicep` and `configuration` folders are included in the root of this repo.
+Sample `bicep`, `configuration` and `scripts` folders are included in the root of this repo.
 
 ### Bicep files
 
@@ -121,6 +123,8 @@ in this case `storage_account_and_container.yaml` might look like the following:
 ---
 bicep_path: storage_account.bicep
 scope: resource_group
+action_on_unmanage: deleteResources
+deny_settings_mode: None
 
 pre_hooks:
   PythonScript: scripts/test_python_hook.py
@@ -139,6 +143,8 @@ post_hooks:
 The `bicep_path` here points to the template in the `bicep/` folder of the project. This bicep template is then deployed using the provided `params` block to the subscription and resource group determined by the configuration files path.
 
 `scope` is an optional parameter, where the default value is not specified is `resource_group`. The other valid value is `subscription`. This sets the deployment at a subscription scope rather than a resource group scope. This is particularly useful for setting up `Azure Policy`.
+
+`action_on_unmanage` and `deny_settings_mode` set these settings for the [stack group](https://learn.microsoft.com/en-us/cli/azure/stack/group?view=azure-cli-latest#az-stack-group-show) that is created by this configuration. Both are optional and default to `deleteResources` and `None` respectively.
 
 `pre_hooks` and `post_hooks` allow you to specify external scripts that should be run before or after the bicep deployment respectively. If A hook returns a non-success code deployment will be terminated. At current there is only support for `Python3` scripts and `Bash` scripts. `pre_commit` and `post_commit` Hooks are both optional optional.
 

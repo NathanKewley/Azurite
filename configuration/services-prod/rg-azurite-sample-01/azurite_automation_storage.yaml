@@ -2,7 +2,7 @@
 bicep_path: storage_account.bicep
 
 pre_hooks:
-  Python3Script: scripts/sample_python_hook.py
+  Python3Script: sample_python_hook.py
 
 params:
   location: australiaeast
@@ -11,4 +11,4 @@ params:
   skuName: Standard_LRS
 
 post_hooks:
-  BashScript: scripts/sample_bash_hook.sh
+  BashScript: sample_bash_hook.sh
