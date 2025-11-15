@@ -226,3 +226,11 @@ The scope of these commands is the same as the deploy commands
 ### Destroying at account scope
 
 `Azurite destroy-account`
+
+## Environment Variables
+
+### AZURITE_LOGGING_LEVEL
+
+Sets the logging level. This defaults to "INFO".
+
+Set to "DEBUG" for additional info about deployments.

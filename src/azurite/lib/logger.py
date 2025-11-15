@@ -1,4 +1,5 @@
 import logging
+import os
 
 class LoggerFormatter(logging.Formatter):
 
@@ -25,9 +26,10 @@ class LoggerFormatter(logging.Formatter):
 class Logger:
     
     @staticmethod
-    def get_logger(logger_name="logging", level=logging.DEBUG, colour_format=True):
+    def get_logger(logger_name="logging", level=logging.INFO, colour_format=True):
         logger = logging.getLogger(logger_name)
         logger.handlers.clear()
+        level = os.getenv('AZURITE_LOGGING_LEVEL', level)
         logger.setLevel(level)
         ch = logging.StreamHandler()
         if colour_format:
