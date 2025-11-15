@@ -229,8 +229,4 @@ The scope of these commands is the same as the deploy commands
 
 ## Environment Variables
 
-### AZURITE_LOGGING_LEVEL
-
-Sets the logging level. This defaults to "INFO".
-
-Set to "DEBUG" for additional info about deployments.
+Please see the [Environment Variables](https://github.com/NathanKewley/Azurite/wiki/Environment-Variables) wiki page for details.
