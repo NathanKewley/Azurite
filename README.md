@@ -205,11 +205,9 @@ This will deploy every configuration file in the project to the appropriate subs
 
 Destroy will NOT destroy resource groups. This is because there could be resources in a resource group not managed by an Azurite stack and we don't want to delete those along with a resource group being deleted.
 
-Destroy will NOT run pre and post hooks.
-
-Destroy will NOT build a hierarchy of inputs and outputs. It will just destroy sequentially.
-
-The scope of these commands is the same as the deploy commands
+* Destroy will NOT run pre and post hooks.
+* Destroy will NOT build a hierarchy of inputs and outputs. It will just destroy sequentially.
+* The scope of these commands is the same as the deploy commands
 
 ### Destroy a single configuration
 

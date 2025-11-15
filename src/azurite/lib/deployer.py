@@ -47,8 +47,9 @@ class Deployer():
     def build_param_string(self, params, subscription):
         param_string = ""
         for param, value in params.items():
-            if value.startswith("Ref:"):
-                value = self.get_deployment_output_param(value, subscription)
+            if isinstance(value, str):
+                if value.startswith("Ref:"):
+                    value = self.get_deployment_output_param(value, subscription)
             param_string = param_string + f"{param}={value} "
         return param_string[:-1]
 

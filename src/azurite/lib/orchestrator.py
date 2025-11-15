@@ -97,9 +97,10 @@ class Orchestrator():
             # destroy does not need to be ordered by params
             if deploy_mode == "deploy":
                 for param, value in config['params'].items():
-                    if "Ref:" in value:
-                        if not dry_run:
-                            self.check_deployment_dependancy(value, subscription)
+                    if isinstance(value, str):
+                        if "Ref:" in value:
+                            if not dry_run:
+                                self.check_deployment_dependancy(value, subscription)
 
             self.logger.info(f"{deploy_mode}ing: {configuration} to {subscription}")
             if not dry_run:
