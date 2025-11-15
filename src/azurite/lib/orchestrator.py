@@ -74,7 +74,7 @@ class Orchestrator():
         self.deploy(deployment_config_path)        
         self.subscription.set_subscription(subscription)
 
-    def deploy(self, configuration, dry_run=False):
+    def deploy(self, configuration, deploy_mode="deploy", dry_run=False):
         if configuration not in self.deploys:
             self.deploys.append(configuration)
             config = self.load_config(configuration)
@@ -94,35 +94,47 @@ class Orchestrator():
                 deny_settings_mode = "None"
 
             # deploy dependant deployments before this one
-            for param, value in config['params'].items():
-                if "Ref:" in value:
-                    if not dry_run:
-                        self.check_deployment_dependancy(value, subscription)
+            # destroy does not need to be ordered by params
+            if deploy_mode == "deploy":
+                for param, value in config['params'].items():
+                    if "Ref:" in value:
+                        if not dry_run:
+                            self.check_deployment_dependancy(value, subscription)
 
-            self.logger.info(f"Deploying: {configuration} to {subscription}")
+            self.logger.info(f"{deploy_mode}ing: {configuration} to {subscription}")
             if not dry_run:
                 # Run pre-delpoy hooks
-                if 'pre_hooks' in config.keys():
+                if ('pre_hooks' in config.keys()) and deploy_mode == "deploy":
                     self.hook_orchestrator.run_hooks(config['pre_hooks'])
 
                 # Run main deployment
-                if 'scope' in config:
-                    if config['scope'] == 'subscription':
-                        self.deployer.deploy_bicep_subscription(config['params'], config['bicep_path'], location, deployment_name, action_on_unmanage, deny_settings_mode, subscription)   
-                    if config['scope'] == 'resource_group':     
+                if deploy_mode == "deploy":
+                    if 'scope' in config:
+                        if config['scope'] == 'subscription':
+                                self.deployer.deploy_bicep_subscription(config['params'], config['bicep_path'], location, deployment_name, action_on_unmanage, deny_settings_mode, subscription)   
+                        if config['scope'] == 'resource_group':     
+                            self.deployer.deploy_bicep(config['params'], config['bicep_path'], resource_group, location, deployment_name, action_on_unmanage, deny_settings_mode, subscription)
+                    else:
                         self.deployer.deploy_bicep(config['params'], config['bicep_path'], resource_group, location, deployment_name, action_on_unmanage, deny_settings_mode, subscription)
-                else:
-                    self.deployer.deploy_bicep(config['params'], config['bicep_path'], resource_group, location, deployment_name, action_on_unmanage, deny_settings_mode, subscription)
+                elif deploy_mode == "destroy":
+                    if self.get_deployment(deployment_name, resource_group):
+                        if 'scope' in config:
+                            if config['scope'] == 'subscription':
+                                self.deployer.destroy_bicep_subscription(deployment_name, subscription, action_on_unmanage)   
+                            if config['scope'] == 'resource_group':     
+                                self.deployer.destroy_bicep(resource_group, deployment_name, subscription, action_on_unmanage)
+                        else:
+                            self.deployer.destroy_bicep(resource_group, deployment_name, subscription, action_on_unmanage)
 
                 # Run post-delpoy hooks
-                if 'post_hooks' in config.keys():
+                if ('post_hooks' in config.keys()) and deploy_mode == "deploy":
                     self.hook_orchestrator.run_hooks(config['post_hooks'])
             else:
                 return [config['params'], config['bicep_path'], resource_group, location, deployment_name, subscription]
         else:
             return
         
-    def deploy_resource_group(self, configuration, dry_run=False):
+    def deploy_resource_group(self, configuration, deploy_mode="deploy", dry_run=False):
         test_results = []
 
         subscription = self.get_subscription(configuration)
@@ -131,98 +143,43 @@ class Orchestrator():
         for deployment in deployments:
             if deployment != "location.yaml":
                 if not dry_run:
-                    self.deploy(f"{subscription}/{resource_group}/{deployment}")
+                    self.deploy(f"{subscription}/{resource_group}/{deployment}", deploy_mode=deploy_mode)
                 else:
                     test_results.append(f"{subscription}/{resource_group}/{deployment}")
         if dry_run:
             return test_results
 
-    def deploy_subscription(self, configuration, dry_run=False):
+    def deploy_subscription(self, configuration, deploy_mode="deploy", dry_run=False):
         test_results = []
         resource_groups = self.get_child_items(f"configuration/{configuration}/")
         for resource_group in resource_groups:
             if not dry_run:
-                self.deploy_resource_group(f"{configuration}/{resource_group}")
+                self.deploy_resource_group(f"{configuration}/{resource_group}", deploy_mode=deploy_mode)
             else:
                 test_results.append(f"{configuration}/{resource_group}")
         if dry_run:
             return test_results                
 
-    def deploy_account(self, dry_run=False):
+    def deploy_account(self, deploy_mode="deploy", dry_run=False):
         test_results = []
         subscriptions = self.get_child_items("configuration/")
         for subscription in subscriptions:
             if not dry_run:
-                self.deploy_subscription(subscription)
+                self.deploy_subscription(subscription, deploy_mode=deploy_mode)
             else:
                 test_results.append(subscription)
         if dry_run:
             return test_results                        
 
-    def destroy(self, configuration, dry_run=False):
-        config = self.load_config(configuration)
-        location = self.load_location(configuration)
-        deployment_name = self.get_deployment_name(configuration)
-        subscription = self.get_subscription(configuration)
-        resource_group = self.get_resource_group(configuration)        
+    def destroy(self, configuration, deploy_mode="destroy", dry_run=False):
+        self.deploy(configuration, deploy_mode=deploy_mode)
 
-        # Configuration Settings with defaults
-        if "action_on_unmanage" in config.keys():
-            action_on_unmanage = config["action_on_unmanage"]
-        else:
-            action_on_unmanage = "deleteResources"
+    def destroy_resource_group(self, configuration, deploy_mode="destroy", dry_run=False):
+        self.deploy_resource_group(configuration, deploy_mode=deploy_mode)
 
-        # Check deployment exists before trying to destroy
-        if self.get_deployment(deployment_name, resource_group):
-            self.logger.info(f"Destroying: {configuration} from {subscription}")
-            if not dry_run:
-                # No pre or post hooks supported for destroy
-                # Could look at supporting specific hooks for destroy events
-                # Run main deployment
-                if 'scope' in config:
-                    if config['scope'] == 'subscription':
-                        self.deployer.destroy_bicep_subscription(deployment_name, subscription, action_on_unmanage)   
-                    if config['scope'] == 'resource_group':     
-                        self.deployer.destroy_bicep(resource_group, deployment_name, subscription, action_on_unmanage)
-                else:
-                    self.deployer.destroy_bicep(resource_group, deployment_name, subscription, action_on_unmanage)
-            else:
-                return [config['bicep_path'], resource_group, deployment_name, subscription]
+    def destroy_subscription(self, configuration, deploy_mode="destroy", dry_run=False):
+        self.deploy_subscription(configuration, deploy_mode=deploy_mode)
 
-    def destroy_resource_group(self, configuration, dry_run=False):
-        test_results = []
-
-        subscription = self.get_subscription(configuration)
-        resource_group = self.get_resource_group(configuration)
-        deployments = self.get_child_items(f"configuration/{configuration}/")
-        for deployment in deployments:
-            if deployment != "location.yaml":
-                if not dry_run:
-                    self.destroy(f"{subscription}/{resource_group}/{deployment}")
-                else:
-                    test_results.append(f"{subscription}/{resource_group}/{deployment}")
-        if dry_run:
-            return test_results
-
-    def destroy_subscription(self, configuration, dry_run=False):
-        test_results = []
-        resource_groups = self.get_child_items(f"configuration/{configuration}/")
-        for resource_group in resource_groups:
-            if not dry_run:
-                self.destroy_resource_group(f"{configuration}/{resource_group}")
-            else:
-                test_results.append(f"{configuration}/{resource_group}")
-        if dry_run:
-            return test_results                
-
-    def destroy_account(self, dry_run=False):
-        test_results = []
-        subscriptions = self.get_child_items("configuration/")
-        for subscription in subscriptions:
-            if not dry_run:
-                self.destroy_subscription(subscription)
-            else:
-                test_results.append(subscription)
-        if dry_run:
-            return test_results  
+    def destroy_account(self, deploy_mode="destroy", dry_run=False):
+        self.deploy_account(deploy_mode=deploy_mode)
         
