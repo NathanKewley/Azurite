@@ -4,6 +4,8 @@ Azurite is an Azure Bicep orchestration tool. The main goal is to separate envir
 
 There is some additional getting started info in the [wiki](https://github.com/NathanKewley/Azurite/wiki)
 
+There is also a sample project with some examples of usege [here](https://github.com/NathanKewley/azurite-sample-project)
+
 ## Goals
 
 * Separation of Bicep configuration and templates
@@ -28,7 +30,7 @@ There is some additional getting started info in the [wiki](https://github.com/N
 * Clone this repo
 * Install requirements `pip3 install -r requirements.txt`
 * Build the project `python3 -m build`
-* Install `pip3 install dist/Azurite-0.0.4-py3-none-any.whl`
+* Install `pip3 install dist/azurite-0.0.4-py3-none-any.whl`
 
 ## Assumptions
 
