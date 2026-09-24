@@ -31,6 +31,8 @@ def azurite():
     args = _parse_args()
     logger.debug(args)
     try:
+        # Fail before any hooks or deployments run if the Azure login is missing or expired
+        orchestrator.subscription.check_azure_login()
         if args.suboperation is None:
             getattr(orchestrator, f"{args.operation[0]}")()
         else:

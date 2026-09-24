@@ -102,6 +102,11 @@ class Subproc():
     def list_subscriptions(self):
         return self.run_command(["az", "account", "list", "--output", "json"])
 
+    def check_azure_login(self):
+        # Requesting a token authenticates against Azure, unlike 'az account show' which only reads the local cache.
+        # Only the expiry is returned so the token itself never reaches the logs
+        return self.run_command_output_or_error(["az", "account", "get-access-token", "--query", "expiresOn", "--output", "tsv"])
+
     def get_current_subscription(self):
         return self.run_command_output_or_error(["az", "account", "show", "--output", "json"])
 

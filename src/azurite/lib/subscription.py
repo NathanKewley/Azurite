@@ -11,6 +11,12 @@ class Subscription():
         self.logger.propagate = False
         self.subproc = subproc
 
+    def check_azure_login(self):
+        returncode, output = self.subproc.check_azure_login()
+        if returncode != 0:
+            self.logger.error(f"Unable to authenticate with Azure, run 'az login'.\n{output.strip()}")
+            sys.exit(1)
+
     def check_if_current(self, subscription_name):
         returncode, output = self.subproc.get_current_subscription()
         if returncode != 0:

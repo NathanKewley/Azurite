@@ -95,3 +95,8 @@ def test_resource_group_exists():
 def test_resource_group_exists_returns_error_on_failure():
     with patch("subprocess.run", return_value = completed([], 1, "", "ERROR: AADSTS700082: The refresh token has expired")):
         assert subproc.resource_group_exists("rg") == (1, "ERROR: AADSTS700082: The refresh token has expired")
+
+def test_check_azure_login_only_returns_expiry():
+    with patch("subprocess.run", return_value = completed([], 0, "2026-09-24 18:19:50.000000\n")) as run:
+        assert subproc.check_azure_login() == (0, "2026-09-24 18:19:50.000000\n")
+        assert run.call_args[0][0] == ["az", "account", "get-access-token", "--query", "expiresOn", "--output", "tsv"]

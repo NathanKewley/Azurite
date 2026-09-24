@@ -72,3 +72,16 @@ def test_set_subscription_not_logged_in():
         # stops after az account show, never tries to list or switch subscriptions
         run.assert_called_once()
         assert run.call_args[0][0] == ["az", "account", "show", "--output", "json"]
+
+def test_check_azure_login():
+    with patch.object(Subproc, 'check_azure_login', return_value = (0, "2026-09-24 18:19:50.000000\n")):
+        subscription = Subscription(Subproc())
+        subscription.check_azure_login()
+
+def test_check_azure_login_expired():
+    expired = "ERROR: AADSTS700082: The refresh token has expired due to inactivity."
+    with patch.object(Subproc, 'check_azure_login', return_value = (1, expired)):
+        subscription = Subscription(Subproc())
+        with pytest.raises(SystemExit) as e:
+            subscription.check_azure_login()
+        assert e.value.code == 1
