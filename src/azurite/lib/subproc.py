@@ -10,11 +10,11 @@ class Subproc():
         self.logger = logger.get_logger()
         self.logger.propagate = False
 
-    def _run(self, command):
+    def _run(self, command, capture=True):
         # Commands are argument lists, each item reaches the process as one argument so values can contain spaces
         self.logger.debug(f"command: {shlex.join(command)}")
         try:
-            return subprocess.run(command, capture_output=True, text=True, check=False)
+            return subprocess.run(command, capture_output=capture, text=True, check=False)
         except FileNotFoundError:
             if command[0] == "az":
                 self.logger.error("Azure CLI (az) not found on PATH, is it installed? https://learn.microsoft.com/cli/azure/install-azure-cli")
@@ -26,8 +26,9 @@ class Subproc():
         # stdout only, az writes warnings to stderr which would break json parsing
         return self._run(command).stdout
 
-    def run_command_exit_code(self, command):
-        return self._run(command).returncode
+    def run_command_streamed(self, command):
+        # Output is not captured, it goes straight to the terminal / CI log as the command runs
+        return self._run(command, capture=False).returncode
 
     def run_command_with_exit_code(self, command):
         result = self._run(command)

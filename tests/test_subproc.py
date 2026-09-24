@@ -27,11 +27,11 @@ def test_run_command_with_exit_code():
     with patch("subprocess.run", return_value = completed([], 1, "out", "ERROR: failed")):
         assert subproc.run_command_with_exit_code(["az", "stack", "group", "create"]) == (1, "outERROR: failed")
 
-def test_run_command_exit_code_keeps_spaces_in_arguments(tmp_path):
+def test_run_command_streamed_keeps_spaces_in_arguments(tmp_path):
     script = tmp_path / "hook with spaces.sh"
     script.write_text("[ \"$1\" = \"value with spaces\" ]\n")
-    assert subproc.run_command_exit_code(["sh", str(script), "value with spaces"]) == 0
-    assert subproc.run_command_exit_code(["sh", str(script), "other"]) != 0
+    assert subproc.run_command_streamed(["sh", str(script), "value with spaces"]) == 0
+    assert subproc.run_command_streamed(["sh", str(script), "other"]) != 0
 
 def test_get_stack_resource_group():
     with patch("subprocess.run", return_value = completed([], 0, "{}", "WARNING: something")) as run:
@@ -72,6 +72,7 @@ def test_hooks_pass_script_as_one_argument():
     with patch("subprocess.run", return_value = completed([], 0)) as run:
         BashHook(subproc.logger, "my hook.sh").execute_hook()
         assert run.call_args[0][0] == ["sh", "scripts/my hook.sh"]
+        assert run.call_args[1]["capture_output"] is False
         PythonHook(subproc.logger, "my hook.py").execute_hook()
         assert run.call_args[0][0] == ["python3", "scripts/my hook.py"]
 
@@ -84,7 +85,7 @@ def test_az_not_installed():
 def test_hook_interpreter_not_installed():
     with patch("subprocess.run", side_effect = FileNotFoundError(2, "No such file or directory", "python3")):
         with pytest.raises(SystemExit) as e:
-            subproc.run_command_exit_code(["python3", "scripts/hook.py"])
+            subproc.run_command_streamed(["python3", "scripts/hook.py"])
         assert e.value.code == 1
 
 def test_resource_group_exists():
@@ -100,3 +101,26 @@ def test_check_azure_login_only_returns_expiry():
     with patch("subprocess.run", return_value = completed([], 0, "2026-09-24 18:19:50.000000\n")) as run:
         assert subproc.check_azure_login() == (0, "2026-09-24 18:19:50.000000\n")
         assert run.call_args[0][0] == ["az", "account", "get-access-token", "--query", "expiresOn", "--output", "tsv"]
+
+def test_hook_output_is_shown(tmp_path, monkeypatch, capfd):
+    from azurite.lib.hooks.BashScript import Hook as BashHook
+    (tmp_path / "scripts").mkdir()
+    (tmp_path / "scripts" / "hook.sh").write_text("echo 'hook stdout line'\necho 'hook stderr line' >&2\n")
+    monkeypatch.chdir(tmp_path)
+    BashHook(subproc.logger, "hook.sh").execute_hook()
+    captured = capfd.readouterr()
+    assert "hook stdout line" in captured.out
+    assert "hook stderr line" in captured.err
+
+def test_failing_hook_exits_with_error(tmp_path, monkeypatch, capfd):
+    from azurite.lib.hooks.Python3Script import Hook as PythonHook
+    (tmp_path / "scripts").mkdir()
+    (tmp_path / "scripts" / "hook.py").write_text("import sys\nprint('checking prerequisites')\nprint('prerequisite missing', file=sys.stderr)\nsys.exit(3)\n")
+    monkeypatch.chdir(tmp_path)
+    with pytest.raises(SystemExit) as e:
+        PythonHook(subproc.logger, "hook.py").execute_hook()
+    assert e.value.code == 1
+    captured = capfd.readouterr()
+    assert "checking prerequisites" in captured.out
+    assert "prerequisite missing" in captured.err
+    assert "Python3 Hook failed with exit code 3: hook.py" in captured.err
