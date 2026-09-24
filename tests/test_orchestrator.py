@@ -1,4 +1,5 @@
 from unittest.mock import patch
+import os
 import pytest
 
 from azurite.lib.orchestrator import Orchestrator
@@ -242,3 +243,87 @@ def test_destroy_ignores_references(tmp_path, monkeypatch):
          patch.object(Deployer, 'destroy_bicep') as destroy_bicep:
         Orchestrator().destroy_resource_group("sub/rg")
     assert [c.args[1] for c in destroy_bicep.call_args_list] == ["sub.rg.a", "sub.rg.b"]
+
+def make_multi_folder_project(root, references):
+    # references: "sub/rg/name" -> list of "sub/rg/name" it takes an output from
+    (root / "bicep").mkdir()
+    (root / "bicep" / "template.bicep").write_text("")
+    for configuration, dependencies in references.items():
+        folder = root / "configuration" / os.path.dirname(configuration)
+        folder.mkdir(parents=True, exist_ok=True)
+        (folder / "location.yaml").write_text("---\nlocation: australiaeast\n")
+        params = "".join(f"  from_{i}: Ref:{dependency}:output\n" for i, dependency in enumerate(dependencies))
+        (folder / f"{os.path.basename(configuration)}.yaml").write_text(f"---\nbicep_path: template.bicep\nparams:\n  name: x\n{params}")
+
+def destroyed_configs(destroy_bicep):
+    return [c.args[1] for c in destroy_bicep.call_args_list]
+
+def run_destroy(method, *args):
+    with patch.object(Orchestrator, 'stack_exists', return_value = True), \
+         patch.object(Deployer, 'destroy_bicep') as destroy_bicep:
+        getattr(Orchestrator(), method)(*args)
+    return destroyed_configs(destroy_bicep)
+
+def test_destroy_resource_group_reverse_dependency_order(tmp_path, monkeypatch):
+    # alphabetical would be network, storage, vm, which destroys the network while the vm still uses it
+    make_multi_folder_project(tmp_path, {
+        "sub/rg/network": [],
+        "sub/rg/storage": [],
+        "sub/rg/vm": ["sub/rg/network", "sub/rg/storage"],
+    })
+    monkeypatch.chdir(tmp_path)
+    order = run_destroy("destroy_resource_group", "sub/rg")
+    assert order[0] == "sub.rg.vm"
+    assert sorted(order) == ["sub.rg.network", "sub.rg.storage", "sub.rg.vm"]
+
+def test_destroy_chain_order(tmp_path, monkeypatch):
+    make_multi_folder_project(tmp_path, {"sub/rg/a": [], "sub/rg/b": ["sub/rg/a"], "sub/rg/c": ["sub/rg/b"]})
+    monkeypatch.chdir(tmp_path)
+    assert run_destroy("destroy_resource_group", "sub/rg") == ["sub.rg.c", "sub.rg.b", "sub.rg.a"]
+
+def test_destroy_subscription_orders_across_resource_groups(tmp_path, monkeypatch):
+    make_multi_folder_project(tmp_path, {
+        "sub/rg-a-network/vnet": [],
+        "sub/rg-b-app/app": ["sub/rg-a-network/vnet"],
+    })
+    monkeypatch.chdir(tmp_path)
+    assert run_destroy("destroy_subscription", "sub") == ["sub.rg-b-app.app", "sub.rg-a-network.vnet"]
+
+def test_destroy_account_orders_across_subscriptions(tmp_path, monkeypatch):
+    make_multi_folder_project(tmp_path, {
+        "sub-a/rg/shared": [],
+        "sub-b/rg/app": ["sub-a/rg/shared"],
+    })
+    monkeypatch.chdir(tmp_path)
+    assert run_destroy("destroy_account") == ["sub-b.rg.app", "sub-a.rg.shared"]
+
+def test_destroy_ignores_reference_to_removed_config(tmp_path, monkeypatch):
+    make_multi_folder_project(tmp_path, {"sub/rg/a": ["sub/rg/removed"], "sub/rg/b": []})
+    monkeypatch.chdir(tmp_path)
+    assert sorted(run_destroy("destroy_resource_group", "sub/rg")) == ["sub.rg.a", "sub.rg.b"]
+
+def test_destroy_warns_about_dependents_left_behind(tmp_path, monkeypatch, capfd):
+    make_multi_folder_project(tmp_path, {
+        "sub/rg-shared/storage": [],
+        "sub/rg-app/app": ["sub/rg-shared/storage"],
+    })
+    monkeypatch.chdir(tmp_path)
+    assert run_destroy("destroy_resource_group", "sub/rg-shared") == ["sub.rg-shared.storage"]
+    assert "sub/rg-app/app.yaml takes outputs from sub/rg-shared/storage.yaml, which is being destroyed" in capfd.readouterr().err
+
+def test_destroy_not_blocked_by_broken_config_elsewhere(tmp_path, monkeypatch):
+    make_multi_folder_project(tmp_path, {"sub/rg-a/a": [], "sub/rg-b/b": []})
+    (tmp_path / "configuration" / "sub" / "rg-b" / "broken.yaml").write_text("---\nparams: [unclosed\n")
+    monkeypatch.chdir(tmp_path)
+    assert run_destroy("destroy_resource_group", "sub/rg-a") == ["sub.rg-a.a"]
+
+def test_destroy_checks_every_config_before_destroying(tmp_path, monkeypatch, capfd):
+    make_multi_folder_project(tmp_path, {"sub/rg/a": [], "sub/rg/b": []})
+    (tmp_path / "configuration" / "sub" / "rg" / "c.yaml").write_text("---\nscope: subscriptoin\n")
+    monkeypatch.chdir(tmp_path)
+    with patch.object(Orchestrator, 'stack_exists', return_value = True), \
+         patch.object(Deployer, 'destroy_bicep') as destroy_bicep:
+        with pytest.raises(SystemExit):
+            Orchestrator().destroy_resource_group("sub/rg")
+    destroy_bicep.assert_not_called()
+    assert "configuration/sub/rg/c.yaml" in capfd.readouterr().err

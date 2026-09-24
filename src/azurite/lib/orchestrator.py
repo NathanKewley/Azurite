@@ -265,15 +265,78 @@ class Orchestrator():
         if dry_run:
             return test_results                        
 
-    def destroy(self, configuration, deploy_mode="destroy", dry_run=False):
-        self.deploy(configuration, deploy_mode=deploy_mode)
+    def collect_configurations(self, subscription=None, resource_group=None):
+        # Every config under the account, one subscription, or one resource group
+        subscriptions = [subscription] if subscription else self.get_child_directories("configuration/")
+        configurations = []
+        for sub in subscriptions:
+            resource_groups = [resource_group] if resource_group else self.get_child_directories(f"configuration/{sub}/")
+            for rg in resource_groups:
+                configurations += [f"{sub}/{rg}/{config}" for config in self.get_configurations(f"configuration/{sub}/{rg}/")]
+        return configurations
 
-    def destroy_resource_group(self, configuration, deploy_mode="destroy", dry_run=False):
-        self.deploy_resource_group(configuration, deploy_mode=deploy_mode)
+    def get_references(self, configuration):
+        # Configs this one takes outputs from. Lenient on purpose: a config that no longer loads,
+        # or a reference to a config that was removed, should not stop a destroy
+        try:
+            with open(f"configuration/{configuration}") as file:
+                params = (yaml.safe_load(file) or {}).get("params") or {}
+        except Exception:
+            return []
+        references = []
+        for value in (params.values() if isinstance(params, dict) else []):
+            if is_reference(value):
+                try:
+                    references.append(parse_reference(value).configuration)
+                except InvalidReference:
+                    pass
+        return references
 
-    def destroy_subscription(self, configuration, deploy_mode="destroy", dry_run=False):
-        self.deploy_subscription(configuration, deploy_mode=deploy_mode)
+    def get_destroy_order(self, configurations):
+        # Reverse of deploy order, so a config is destroyed before the configs it takes outputs from
+        selected = set(configurations)
+        deploy_order = []
+        visited = set()
 
-    def destroy_account(self, deploy_mode="destroy", dry_run=False):
-        self.deploy_account(deploy_mode=deploy_mode)
-        
+        def visit(configuration):
+            # Marked on entry so a circular reference cannot loop forever
+            if configuration in visited:
+                return
+            visited.add(configuration)
+            for reference in sorted(self.get_references(configuration)):
+                if reference in selected:
+                    visit(reference)
+            deploy_order.append(configuration)
+
+        for configuration in sorted(configurations):
+            visit(configuration)
+        return list(reversed(deploy_order))
+
+    def warn_about_remaining_dependents(self, configurations):
+        selected = set(configurations)
+        for configuration in self.collect_configurations():
+            if configuration in selected:
+                continue
+            for reference in self.get_references(configuration):
+                if reference in selected:
+                    self.logger.warning(f"{configuration} takes outputs from {reference}, which is being destroyed. {configuration} is not part of this destroy")
+
+    def destroy_configurations(self, configurations):
+        # Check every config before destroying anything, so a bad file cannot stop a destroy part way through
+        for configuration in configurations:
+            self.load_config(configuration, deploy_mode="destroy")
+        self.warn_about_remaining_dependents(configurations)
+        for configuration in self.get_destroy_order(configurations):
+            self.deploy(configuration, deploy_mode="destroy")
+
+    def destroy(self, configuration):
+        self.destroy_configurations([configuration])
+
+    def destroy_resource_group(self, configuration):
+        self.destroy_configurations(self.collect_configurations(self.get_subscription(configuration), self.get_resource_group(configuration)))
+
+    def destroy_subscription(self, configuration):
+        self.destroy_configurations(self.collect_configurations(configuration))
+
+    def destroy_account(self):
+        self.destroy_configurations(self.collect_configurations())

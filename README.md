@@ -227,7 +227,8 @@ This will deploy every configuration file in the project to the appropriate subs
 Destroy will NOT destroy resource groups. This is because there could be resources in a resource group not managed by an Azurite stack and we don't want to delete those along with a resource group being deleted.
 
 * Destroy will NOT run pre and post hooks.
-* Destroy will NOT build a hierarchy of inputs and outputs. It will just destroy sequentially.
+* Destroy runs in reverse dependency order: a configuration is destroyed before any configuration it references with `Ref:`, across resource groups and subscriptions within the destroy.
+* If a configuration outside the destroy still references one being destroyed, Azurite logs a warning but does not destroy it.
 * The scope of these commands is the same as the deploy commands
 
 ### Destroy a single configuration
