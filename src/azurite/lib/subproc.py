@@ -15,8 +15,8 @@ class Subproc():
         return subprocess.run(command, capture_output=True, text=True, check=False)
 
     def run_command(self, command):
-        result = self._run(command)
-        return result.stdout + result.stderr
+        # stdout only, az writes warnings to stderr which would break json parsing
+        return self._run(command).stdout
 
     def run_command_exit_code(self, command):
         return self._run(command).returncode

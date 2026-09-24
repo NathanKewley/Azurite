@@ -1,6 +1,7 @@
 from unittest.mock import patch
 import json
 import pytest
+import subprocess
 
 from azurite.lib.subproc import Subproc
 from azurite.lib.subscription import Subscription
@@ -40,3 +41,18 @@ def test_set_subscription_not_found():
         with pytest.raises(SystemExit) as e:
             subscription.set_subscription("does-not-exist")
         assert e.value.code == 1
+
+def test_set_subscription_with_az_warning():
+    current = '{"name": "azurite-sample", "id": "1111"}'
+    subscriptions = '[{"name": "azurite-sample", "id": "1111"}, {"name": "services-prod", "id": "2222"}]'
+    warning = "WARNING: A new version of Azure CLI is available."
+
+    def fake_run(command, **kwargs):
+        stdout = subscriptions if command[:3] == ["az", "account", "list"] else current
+        return subprocess.CompletedProcess(command, 0, stdout=stdout, stderr=warning)
+
+    with patch("subprocess.run", side_effect = fake_run) as run:
+        subproc = Subproc()
+        subscription = Subscription(subproc)
+        subscription.set_subscription("services-prod")
+        assert run.call_args[0][0] == ["az", "account", "set", "--subscription", "2222", "--output", "json"]

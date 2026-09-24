@@ -18,6 +18,10 @@ def test_run_command():
     assert run_command_result['name'] == "azurite-sample.rg-azurite-sample-01.azurite_automation_account"
     assert run_command_result['properties']['provisioningState'] == "Succeeded"
 
+def test_run_command_ignores_stderr_warnings():
+    with patch("subprocess.run", return_value = completed([], 0, '{"name": "services-prod"}', "WARNING: A new version of Azure CLI is available.")):
+        assert json.loads(subproc.run_command(["az", "account", "show", "--output", "json"])) == {"name": "services-prod"}
+
 def test_run_command_with_exit_code():
     with patch("subprocess.run", return_value = completed([], 1, "out", "ERROR: failed")):
         assert subproc.run_command_with_exit_code(["az", "stack", "group", "create"]) == (1, "outERROR: failed")
