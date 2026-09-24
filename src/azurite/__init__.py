@@ -37,3 +37,4 @@ def azurite():
             getattr(orchestrator, f"{args.operation[0]}")(args.suboperation)
     except Exception as e:
         logger.error(e, exc_info=True)
+        sys.exit(1)

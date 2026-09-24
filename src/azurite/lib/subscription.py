@@ -1,4 +1,5 @@
 import json
+import sys
 
 from azurite.lib.logger import Logger as logger
 
@@ -26,4 +27,4 @@ class Subscription():
                     self.subproc.set_subscription(subscription_id)
                     return
             self.logger.error("SUBSCRIPTION NOT FOUND")
-            exit()
+            sys.exit(1)

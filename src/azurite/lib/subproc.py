@@ -23,6 +23,10 @@ class Subproc():
         result = subprocess.run(command.split(' '), capture_output=True, check=False)
         return result.returncode
 
+    def run_command_with_exit_code(self, command):
+        result = subprocess.run(command.split(' '), capture_output=True, text=True, check=False)
+        return result.returncode, result.stdout + result.stderr
+
     def get_resource_groups(self):
         return self.run_command("az group list --output json")        
 
@@ -34,22 +38,22 @@ class Subproc():
     def deploy_group_create(self, bicep, resource_group, deployment_name, action_on_unmanage, deny_settings_mode, parameters):
         azure_cli_command = f"az stack group create -f bicep/{bicep} -g {resource_group} --name {deployment_name} --action-on-unmanage {action_on_unmanage} --deny-settings-mode {deny_settings_mode} --parameters {parameters} --yes --output json"
         self.logger.debug(f"command: {azure_cli_command}")
-        return self.run_command(azure_cli_command)       
+        return self.run_command_with_exit_code(azure_cli_command)       
 
     def deploy_group_destroy(self, resource_group, deployment_name, action_on_unmanage):
         azure_cli_command = f"az stack group delete -g {resource_group} --name {deployment_name} --action-on-unmanage {action_on_unmanage} --yes --verbose --output json"
         self.logger.debug(f"command: {azure_cli_command}")
-        return self.run_command(azure_cli_command)        
+        return self.run_command_with_exit_code(azure_cli_command)        
     
     def deploy_subscription_create(self, bicep, deployment_name, action_on_unmanage, deny_settings_mode, parameters, location):
         azure_cli_command = f"az stack sub create -f bicep/{bicep} --name {deployment_name} --action-on-unmanage {action_on_unmanage} --deny-settings-mode {deny_settings_mode} --parameters {parameters} --location {location} --yes --output json"
         self.logger.debug(f"command: {azure_cli_command}")
-        return self.run_command(azure_cli_command)  
+        return self.run_command_with_exit_code(azure_cli_command)  
 
     def deploy_subscription_destroy(self, deployment_name, action_on_unmanage):
         azure_cli_command = f"az stack sub delete --name {deployment_name} --action-on-unmanage {action_on_unmanage} --yes --output json"
         self.logger.debug(f"command: {azure_cli_command}")
-        return self.run_command(azure_cli_command)        
+        return self.run_command_with_exit_code(azure_cli_command)        
 
     def get_deployment_output(self, deployment_name, resource_group, output_name):
         azure_cli_command = f"az stack group show --name {deployment_name} --resource-group {resource_group} --output json"
