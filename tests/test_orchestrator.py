@@ -10,56 +10,52 @@ from azurite.lib.subscription import Subscription
 orchestrator = Orchestrator()
 
 def test_get_deployment_name():
-    config_path = "azurite-sample/rg-azurite-sample-01/azurite_automation_account.yaml"
+    config_path = "services-prod/rg-azurite-sample-01/azurite_automation_account.yaml"
     result = orchestrator.get_deployment_name(config_path)
-    assert result == "azurite-sample.rg-azurite-sample-01.azurite_automation_account"
+    assert result == "services-prod.rg-azurite-sample-01.azurite_automation_account"
 
 def test_get_resource_group():
-    config_path = "azurite-sample/rg-azurite-sample-01/azurite_automation_account.yaml"
+    config_path = "services-prod/rg-azurite-sample-01/azurite_automation_account.yaml"
     result = orchestrator.get_resource_group(config_path)
     assert result == "rg-azurite-sample-01"
 
 def test_get_subscription():
-    config_path = "azurite-sample/rg-azurite-sample-01/azurite_automation_account.yaml"
+    config_path = "services-prod/rg-azurite-sample-01/azurite_automation_account.yaml"
     result = orchestrator.get_subscription(config_path)
-    assert result == "azurite-sample"
+    assert result == "services-prod"
 
 def test_get_child_items():
-    path = "configuration/azurite-sample/"
+    path = "configuration/services-prod/"
     result = orchestrator.get_child_items(path)
-    assert "rg-azurite-sample-01" in result
-    assert "rg-azurite-sample-02" in result
-    assert len(result) == 2
+    assert sorted(result) == ["policy", "rg-azurite-sample-01", "rg-azurite-sample-02"]
 
 def test_deploy():
-    configuration = "azurite-sample/rg-azurite-sample-01/azurite_automation_account.yaml"
-    result = orchestrator.deploy(configuration, dry_run=True)
-    assert len(result[0]) == 3
-    assert result[0].items() == {('location', 'Ref:azurite-sample.rg-azurite-sample-01.azurite_automation_storage:storageLocation'), ('appName', 'azuriteAutomation'), ('skuName', 'Free')}
+    configuration = "services-prod/rg-azurite-sample-01/azurite_automation_account.yaml"
+    result = Orchestrator().deploy(configuration, dry_run=True)
+    assert result[0] == {'location': 'Ref:services-prod.rg-azurite-sample-01.azurite_automation_storage:storageLocation', 'appName': 'azuriteAutomation', 'skuName': 'Free'}
     assert result[1] == "automation/automation_account.bicep"
     assert result[2] == "rg-azurite-sample-01"
     assert result[3] == "australiaeast"
-    assert result[4] == "azurite-sample.rg-azurite-sample-01.azurite_automation_account"
-    assert result[5] == "azurite-sample"
+    assert result[4] == "services-prod.rg-azurite-sample-01.azurite_automation_account"
+    assert result[5] == "services-prod"
 
 def test_deploy_resource_group():
-    configuration = "azurite-sample/rg-azurite-sample-01"
+    configuration = "services-prod/rg-azurite-sample-01"
     result = orchestrator.deploy_resource_group(configuration, dry_run=True)
-    assert len(result) == 2
-    assert "azurite-sample/rg-azurite-sample-01/azurite_automation_account.yaml" in result
-    assert "azurite-sample/rg-azurite-sample-01/azurite_automation_storage.yaml" in result
+    assert sorted(result) == [
+        "services-prod/rg-azurite-sample-01/azurite_automation_account.yaml",
+        "services-prod/rg-azurite-sample-01/azurite_automation_storage.yaml",
+        "services-prod/rg-azurite-sample-01/azurite_module_virtualnetwork.yaml"
+    ]
 
 def test_deploy_subscription():
-    configuration = "azurite-sample"
+    configuration = "services-prod"
     result = orchestrator.deploy_subscription(configuration, dry_run=True)
-    assert len(result) == 2
-    assert "azurite-sample/rg-azurite-sample-01" in result
-    assert "azurite-sample/rg-azurite-sample-02" in result
+    assert sorted(result) == ["services-prod/policy", "services-prod/rg-azurite-sample-01", "services-prod/rg-azurite-sample-02"]
 
 def test_deploy_account():
     result = orchestrator.deploy_account(dry_run=True)
-    assert len(result) == 1
-    assert "azurite-sample" in result
+    assert result == ["services-prod"]
 
 def test_destroy_subscription_scope():
     orchestrator = Orchestrator()
