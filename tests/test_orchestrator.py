@@ -24,10 +24,49 @@ def test_get_subscription():
     result = orchestrator.get_subscription(config_path)
     assert result == "services-prod"
 
-def test_get_child_items():
+def test_get_child_directories():
     path = "configuration/services-prod/"
-    result = orchestrator.get_child_items(path)
-    assert sorted(result) == ["policy", "rg-azurite-sample-01", "rg-azurite-sample-02"]
+    result = orchestrator.get_child_directories(path)
+    assert result == ["policy", "rg-azurite-sample-01", "rg-azurite-sample-02"]
+
+def make_messy_configuration(root):
+    resource_group = root / "configuration" / "sub-a" / "rg-a"
+    resource_group.mkdir(parents=True)
+    (root / "configuration" / "sub-b" / "rg-b").mkdir(parents=True)
+    (root / "configuration" / ".hidden-sub").mkdir()
+    (root / "configuration" / "README.md").write_text("docs")
+    (root / "configuration" / "sub-a" / "notes.txt").write_text("notes")
+    (root / "configuration" / "sub-a" / ".DS_Store").write_text("")
+    for name in ["location.yaml", "b_storage.yaml", "a_network.yaml", "legacy.yml", "README.md", ".DS_Store", ".hidden.yaml"]:
+        (resource_group / name).write_text("---\n")
+    (resource_group / "subfolder.yaml").mkdir()
+    (resource_group / "archive").mkdir()
+
+def test_get_configurations_skips_non_configurations(tmp_path, monkeypatch, caplog):
+    make_messy_configuration(tmp_path)
+    monkeypatch.chdir(tmp_path)
+    orchestrator = Orchestrator()
+    orchestrator.logger.propagate = True
+    with caplog.at_level("WARNING", logger="logging"):
+        assert orchestrator.get_configurations("configuration/sub-a/rg-a/") == ["a_network.yaml", "b_storage.yaml"]
+    assert "legacy.yml: configuration files must use the .yaml extension" in caplog.text
+    assert "README.md" not in caplog.text
+
+def test_deploy_walkers_skip_stray_files(tmp_path, monkeypatch):
+    make_messy_configuration(tmp_path)
+    monkeypatch.chdir(tmp_path)
+    orchestrator = Orchestrator()
+    assert orchestrator.deploy_account(dry_run=True) == ["sub-a", "sub-b"]
+    assert orchestrator.deploy_subscription("sub-a", dry_run=True) == ["sub-a/rg-a"]
+    assert orchestrator.deploy_resource_group("sub-a/rg-a", dry_run=True) == ["sub-a/rg-a/a_network.yaml", "sub-a/rg-a/b_storage.yaml"]
+
+def test_deploy_resource_group_only_deploys_configurations(tmp_path, monkeypatch):
+    make_messy_configuration(tmp_path)
+    monkeypatch.chdir(tmp_path)
+    orchestrator = Orchestrator()
+    with patch.object(Orchestrator, 'deploy') as deploy:
+        orchestrator.deploy_resource_group("sub-a/rg-a", deploy_mode="destroy")
+    assert [c.args[0] for c in deploy.call_args_list] == ["sub-a/rg-a/a_network.yaml", "sub-a/rg-a/b_storage.yaml"]
 
 def test_deploy():
     configuration = "services-prod/rg-azurite-sample-01/azurite_automation_account.yaml"

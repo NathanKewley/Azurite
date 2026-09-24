@@ -29,8 +29,22 @@ class Orchestrator():
     def get_subscription(self, configuration):
         return configuration.split('/')[0]
 
-    def get_child_items(self, path):
-        return(os.listdir(path))
+    def get_child_directories(self, path):
+        # Subscription and resource group folders, ignoring stray files and hidden folders
+        return sorted(item for item in os.listdir(path) if os.path.isdir(os.path.join(path, item)) and not item.startswith("."))
+
+    def get_configurations(self, path):
+        configurations = []
+        for item in sorted(os.listdir(path)):
+            if item == "location.yaml" or item.startswith(".") or not os.path.isfile(os.path.join(path, item)):
+                continue
+            if item.endswith(".yaml"):
+                configurations.append(item)
+            elif item.endswith(".yml"):
+                self.logger.warning(f"Skipping {os.path.join(path, item)}: configuration files must use the .yaml extension")
+            else:
+                self.logger.debug(f"Skipping non configuration file: {os.path.join(path, item)}")
+        return configurations
 
     def load_config(self, config):
         with open(f"configuration/{config}") as file:
@@ -135,19 +149,18 @@ class Orchestrator():
 
         subscription = self.get_subscription(configuration)
         resource_group = self.get_resource_group(configuration)
-        deployments = self.get_child_items(f"configuration/{configuration}/")
+        deployments = self.get_configurations(f"configuration/{configuration}/")
         for deployment in deployments:
-            if deployment != "location.yaml":
-                if not dry_run:
-                    self.deploy(f"{subscription}/{resource_group}/{deployment}", deploy_mode=deploy_mode)
-                else:
-                    test_results.append(f"{subscription}/{resource_group}/{deployment}")
+            if not dry_run:
+                self.deploy(f"{subscription}/{resource_group}/{deployment}", deploy_mode=deploy_mode)
+            else:
+                test_results.append(f"{subscription}/{resource_group}/{deployment}")
         if dry_run:
             return test_results
 
     def deploy_subscription(self, configuration, deploy_mode="deploy", dry_run=False):
         test_results = []
-        resource_groups = self.get_child_items(f"configuration/{configuration}/")
+        resource_groups = self.get_child_directories(f"configuration/{configuration}/")
         for resource_group in resource_groups:
             if not dry_run:
                 self.deploy_resource_group(f"{configuration}/{resource_group}", deploy_mode=deploy_mode)
@@ -158,7 +171,7 @@ class Orchestrator():
 
     def deploy_account(self, deploy_mode="deploy", dry_run=False):
         test_results = []
-        subscriptions = self.get_child_items("configuration/")
+        subscriptions = self.get_child_directories("configuration/")
         for subscription in subscriptions:
             if not dry_run:
                 self.deploy_subscription(subscription, deploy_mode=deploy_mode)
