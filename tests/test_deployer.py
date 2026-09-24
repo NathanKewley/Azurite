@@ -1,5 +1,6 @@
 from unittest.mock import patch
 import json
+import os
 
 from azurite.lib.subproc import Subproc
 from azurite.lib.deployer import Deployer
@@ -35,14 +36,38 @@ def test_get_deployment_output_param():
                 assert deployer.get_deployment_output_param("Ref:azurite-sample.rg-azurite-sample-01.azurite_automation_storage:storageLocation", "azurite-sample")
                 assert True
 
-def test_build_param_string():
-    sample_azure_response = open('tests/test_output/test_subproc_get_deployment_output.json', 'r').read()
-    with patch.object(Subproc, 'get_deployment_output', return_value = sample_azure_response):
-        with patch.object(Subproc, 'set_subscription', return_value = True):
-            with patch.object(Subscription, 'set_subscription', return_value = True):
-                subproc = Subproc()
-                subscription = Subscription(subproc)
-                deployer = Deployer(subproc, subscription)    
-                params = {'location': 'australiaeast', 'storageName': 'azurisampleorekew', 'containerName': 'azuriteautomation', 'skuName': 'Standard_LRS'}
-                assert deployer.build_param_string(params, "azurite-sample") == "location=australiaeast storageName=azurisampleorekew containerName=azuriteautomation skuName=Standard_LRS"
-                assert True
+def test_build_parameters():
+    with patch.object(Deployer, 'get_deployment_output_param', return_value = "australiaeast"):
+        subproc = Subproc()
+        subscription = Subscription(subproc)
+        deployer = Deployer(subproc, subscription)
+        params = {
+            'location': 'Ref:azurite-sample.rg-azurite-sample-01.azurite_automation_storage:storageLocation',
+            'storageName': 'azurisampleorekew',
+            'displayName': 'Name With Spaces',
+            'addressPrefixes': ['10.0.0.0/20', '10.1.0.0/20'],
+            'tags': {'env': 'prod'},
+            'enabled': True,
+            'count': 3
+        }
+        assert deployer.build_parameters(params, "azurite-sample") == {
+            'location': {'value': 'australiaeast'},
+            'storageName': {'value': 'azurisampleorekew'},
+            'displayName': {'value': 'Name With Spaces'},
+            'addressPrefixes': {'value': ['10.0.0.0/20', '10.1.0.0/20']},
+            'tags': {'value': {'env': 'prod'}},
+            'enabled': {'value': True},
+            'count': {'value': 3}
+        }
+
+def test_write_parameters_file():
+    subproc = Subproc()
+    subscription = Subscription(subproc)
+    deployer = Deployer(subproc, subscription)
+    parameters_file = deployer.write_parameters_file({'allowedLocations': ['australiaeast'], 'enabled': False}, "azurite-sample")
+    try:
+        parameters = json.loads(open(parameters_file, 'r').read())
+        assert parameters['contentVersion'] == "1.0.0.0"
+        assert parameters['parameters'] == {'allowedLocations': {'value': ['australiaeast']}, 'enabled': {'value': False}}
+    finally:
+        os.remove(parameters_file)

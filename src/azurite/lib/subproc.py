@@ -35,8 +35,8 @@ class Subproc():
         azure_cli_command = f"az group create --location {location} --name {resource_group} --output json"
         self.run_command(azure_cli_command)     
 
-    def deploy_group_create(self, bicep, resource_group, deployment_name, action_on_unmanage, deny_settings_mode, parameters):
-        azure_cli_command = f"az stack group create -f bicep/{bicep} -g {resource_group} --name {deployment_name} --action-on-unmanage {action_on_unmanage} --deny-settings-mode {deny_settings_mode} --parameters {parameters} --yes --output json"
+    def deploy_group_create(self, bicep, resource_group, deployment_name, action_on_unmanage, deny_settings_mode, parameters_file):
+        azure_cli_command = f"az stack group create -f bicep/{bicep} -g {resource_group} --name {deployment_name} --action-on-unmanage {action_on_unmanage} --deny-settings-mode {deny_settings_mode} --parameters @{parameters_file} --yes --output json"
         self.logger.debug(f"command: {azure_cli_command}")
         return self.run_command_with_exit_code(azure_cli_command)       
 
@@ -45,8 +45,8 @@ class Subproc():
         self.logger.debug(f"command: {azure_cli_command}")
         return self.run_command_with_exit_code(azure_cli_command)        
     
-    def deploy_subscription_create(self, bicep, deployment_name, action_on_unmanage, deny_settings_mode, parameters, location):
-        azure_cli_command = f"az stack sub create -f bicep/{bicep} --name {deployment_name} --action-on-unmanage {action_on_unmanage} --deny-settings-mode {deny_settings_mode} --parameters {parameters} --location {location} --yes --output json"
+    def deploy_subscription_create(self, bicep, deployment_name, action_on_unmanage, deny_settings_mode, parameters_file, location):
+        azure_cli_command = f"az stack sub create -f bicep/{bicep} --name {deployment_name} --action-on-unmanage {action_on_unmanage} --deny-settings-mode {deny_settings_mode} --parameters @{parameters_file} --location {location} --yes --output json"
         self.logger.debug(f"command: {azure_cli_command}")
         return self.run_command_with_exit_code(azure_cli_command)  
 

@@ -142,6 +142,19 @@ post_hooks:
 
 The `bicep_path` here points to the template in the `bicep/` folder of the project. This bicep template is then deployed using the provided `params` block to the subscription and resource group determined by the configuration files path.
 
+`params` values are passed to Bicep with their YAML types, so use native YAML for `array`, `object`, `bool` and `int` parameters rather than quoted strings:
+
+```
+params:
+  addressPrefixes:
+    - 10.0.0.0/20
+    - 10.1.0.0/20
+  tags:
+    environment: prod
+  enableHttpsOnly: true
+  instanceCount: 2
+```
+
 `scope` is an optional parameter, where the default value is not specified is `resource_group`. The other valid value is `subscription`. This sets the deployment at a subscription scope rather than a resource group scope. This is particularly useful for setting up `Azure Policy`. Please see the [Working with Azure Policy](https://github.com/NathanKewley/Azurite/wiki/Working-with-Azure-Policy) wiki page for more details on this.
 
 `action_on_unmanage` and `deny_settings_mode` set these settings for the [stack group](https://learn.microsoft.com/en-us/cli/azure/stack/group?view=azure-cli-latest#az-stack-group-show) that is created by this configuration. Both are optional and default to `deleteResources` and `None` respectively.

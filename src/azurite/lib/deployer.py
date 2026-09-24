@@ -1,5 +1,7 @@
 import json
+import os
 import sys
+import tempfile
 
 from azurite.lib.logger import Logger as logger
 from azurite.lib.subscription import Subscription
@@ -45,14 +47,25 @@ class Deployer():
         self.subscription.set_subscription(subscription)
         return value
 
-    def build_param_string(self, params, subscription):
-        param_string = ""
+    def build_parameters(self, params, subscription):
+        parameters = {}
         for param, value in params.items():
             if isinstance(value, str):
                 if value.startswith("Ref:"):
                     value = self.get_deployment_output_param(value, subscription)
-            param_string = param_string + f"{param}={value} "
-        return param_string[:-1]
+            parameters[param] = {"value": value}
+        return parameters
+
+    def write_parameters_file(self, params, subscription):
+        parameters_file = {
+            "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentParameters.json#",
+            "contentVersion": "1.0.0.0",
+            "parameters": self.build_parameters(params, subscription)
+        }
+        self.logger.debug(f"Deployment Parameters: {json.dumps(parameters_file['parameters'], default=str)}")
+        with tempfile.NamedTemporaryFile(mode="w", prefix="azurite-", suffix=".json", delete=False) as file:
+            json.dump(parameters_file, file, default=str)
+        return file.name
 
     def deploy_bicep(self, params, bicep, resource_group, location, deployment_name, action_on_unmanage, deny_settings_mode, subscription):
         self.subscription.set_subscription(subscription)  
@@ -62,8 +75,11 @@ class Deployer():
         self.logger.debug(f"Deployment Name: {deployment_name}")
         self.logger.debug(f"Deployment Subscription: {subscription}")
         self.logger.debug(f"Deployment Resource Group: {resource_group}")
-        parameters = self.build_param_string(params, subscription)
-        returncode, deploy_result = self.subproc.deploy_group_create(bicep, resource_group, deployment_name, action_on_unmanage, deny_settings_mode, parameters)
+        parameters_file = self.write_parameters_file(params, subscription)
+        try:
+            returncode, deploy_result = self.subproc.deploy_group_create(bicep, resource_group, deployment_name, action_on_unmanage, deny_settings_mode, parameters_file)
+        finally:
+            os.remove(parameters_file)
         if returncode == 0:
             self.logger.info("Deploy Complete\n")
             return
@@ -75,8 +91,11 @@ class Deployer():
               
         self.logger.debug(f"Deployment Name: {deployment_name}")
         self.logger.debug(f"Deployment Subscription: {subscription}")        
-        parameters = self.build_param_string(params, subscription)
-        returncode, deploy_result = self.subproc.deploy_subscription_create(bicep, deployment_name, action_on_unmanage, deny_settings_mode, parameters, location)
+        parameters_file = self.write_parameters_file(params, subscription)
+        try:
+            returncode, deploy_result = self.subproc.deploy_subscription_create(bicep, deployment_name, action_on_unmanage, deny_settings_mode, parameters_file, location)
+        finally:
+            os.remove(parameters_file)
         if returncode == 0:
             self.logger.info("Deploy Complete\n")
             return
