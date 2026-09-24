@@ -10,6 +10,7 @@ from azurite.lib.deployer import Deployer
 from azurite.lib.subscription import Subscription
 from azurite.lib.hook_orchestrator import HookOrchestrator
 from azurite.lib import hooks
+from azurite.lib.reference import InvalidReference, is_reference, parse_reference
 
 CONFIG_KEYS = {"bicep_path", "scope", "params", "action_on_unmanage", "deny_settings_mode", "pre_hooks", "post_hooks"}
 SCOPES = ("resource_group", "subscription")
@@ -80,6 +81,13 @@ class Orchestrator():
 
         if config.get("params") is not None and not isinstance(config["params"], dict):
             errors.append("'params' must be a mapping of parameter names to values")
+        elif deploy_mode == "deploy":
+            for param, value in (config.get("params") or {}).items():
+                if is_reference(value):
+                    try:
+                        parse_reference(value)
+                    except InvalidReference as e:
+                        errors.append(f"param '{param}': {e}")
 
         # Destroy only needs the stack name and scope, so a config whose template has been removed can still be destroyed
         if deploy_mode == "deploy":
@@ -131,24 +139,17 @@ class Orchestrator():
         return returncode == 0
 
     def check_deployment_dependancy(self, value, subscription):
-        deployment_name = value.split(":")[1]
-        output_name = value.split(":")[2]
-        resource_group = value.split(":")[1][1:].split(".")[1]
-        parameter_subscription = value.split(":")[1].split(".")[0]
-
-        self.subscription.set_subscription(parameter_subscription)
-        # if not self.get_deployment(deployment_name, resource_group):
-        #     deployment_config_path = deployment_name.replace(".","/") + ".yaml"
+        reference = parse_reference(value)
+        # if not self.stack_exists(reference.deployment_name, reference.resource_group, reference.subscription, scope):
         #     self.logger.info("Deployment has dependencies. Resolving...")
-        #     self.deploy(deployment_config_path)
+        #     self.deploy(reference.configuration)
 
         # We are going to deploy regardless here as it will update existing deployments.
         # If no changes then this still takes about 30 sec per stack so in undesirable.
         # maybe we can convert the bicep to be deployed to ARM and call the existing deployment
         # do a diff and only re-deploy if there are changes?
-        deployment_config_path = deployment_name.replace(".","/") + ".yaml"
         self.logger.info("Deployment has dependencies. Resolving...")
-        self.deploy(deployment_config_path)        
+        self.deploy(reference.configuration)
         self.subscription.set_subscription(subscription)
 
     def deploy(self, configuration, deploy_mode="deploy", dry_run=False):
@@ -175,10 +176,8 @@ class Orchestrator():
             # destroy does not need to be ordered by params
             if deploy_mode == "deploy":
                 for param, value in config['params'].items():
-                    if isinstance(value, str):
-                        if "Ref:" in value:
-                            if not dry_run:
-                                self.check_deployment_dependancy(value, subscription)
+                    if is_reference(value) and not dry_run:
+                        self.check_deployment_dependancy(value, subscription)
 
             self.logger.info(f"{deploy_mode}ing: {configuration} to {subscription}")
             if not dry_run:

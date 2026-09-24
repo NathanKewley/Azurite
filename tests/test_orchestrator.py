@@ -156,3 +156,19 @@ def test_deploy_invalid_scope(tmp_path, monkeypatch):
         assert e.value.code == 1
         deploy_group.assert_not_called()
         deploy_subscription.assert_not_called()
+
+def test_dependency_with_dotted_file_name(tmp_path, monkeypatch):
+    resource_group = tmp_path / "configuration" / "sub" / "rg"
+    resource_group.mkdir(parents=True)
+    (tmp_path / "bicep").mkdir()
+    (tmp_path / "bicep" / "storage.bicep").write_text("")
+    (resource_group / "location.yaml").write_text("---\nlocation: australiaeast\n")
+    (resource_group / "storage.v2.yaml").write_text("---\nbicep_path: storage.bicep\n")
+    (resource_group / "app.yaml").write_text("---\nbicep_path: storage.bicep\nparams:\n  location: Ref:sub.rg.storage.v2:storageLocation\n")
+    monkeypatch.chdir(tmp_path)
+    orchestrator = Orchestrator()
+    with patch.object(Subscription, 'set_subscription'), \
+         patch.object(Deployer, 'deploy_bicep') as deploy_bicep:
+        orchestrator.deploy("sub/rg/app.yaml")
+    # the dependency deploys first, from the right file and with the right stack name
+    assert [c.args[4] for c in deploy_bicep.call_args_list] == ["sub.rg.storage.v2", "sub.rg.app"]

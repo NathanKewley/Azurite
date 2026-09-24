@@ -128,3 +128,24 @@ def test_bad_location_file(tmp_path, monkeypatch, capfd, location_text, message)
     err = capfd.readouterr().err
     assert "configuration/sub/rg/location.yaml" in err
     assert message in err
+
+def test_bad_references_reported_on_load(tmp_path, monkeypatch, capfd):
+    make_project(tmp_path, """---
+bicep_path: storage.bicep
+params:
+  location: Ref:sub.rg.missing:storageLocation
+  name: Ref:sub.rg.app
+  plain: not a reference
+""")
+    monkeypatch.chdir(tmp_path)
+    with pytest.raises(SystemExit) as e:
+        Orchestrator().load_config("sub/rg/app.yaml")
+    assert e.value.code == 1
+    err = capfd.readouterr().err
+    assert "param 'location': 'Ref:sub.rg.missing:storageLocation' refers to a configuration that does not exist" in err
+    assert "param 'name': 'Ref:sub.rg.app' is missing the output name" in err
+
+def test_references_not_checked_on_destroy(tmp_path, monkeypatch):
+    make_project(tmp_path, "---\nbicep_path: storage.bicep\nparams:\n  location: Ref:sub.rg.removed:storageLocation\n")
+    monkeypatch.chdir(tmp_path)
+    Orchestrator().load_config("sub/rg/app.yaml", deploy_mode="destroy")

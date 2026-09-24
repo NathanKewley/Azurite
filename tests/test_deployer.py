@@ -88,20 +88,21 @@ def test_get_deployment_output_missing_output():
 
 def test_get_deployment_output_param():
     sample_azure_response = open('tests/test_output/test_subproc_get_deployment_output.json', 'r').read()
-    with patch.object(Subproc, 'get_stack', return_value = (0, sample_azure_response)):
+    with patch.object(Subproc, 'get_stack', return_value = (0, sample_azure_response)) as get_stack:
         with patch.object(Deployer, 'get_reference_scope', return_value = "resource_group"):
             with patch.object(Subscription, 'set_subscription', return_value = True):
                 subproc = Subproc()
                 subscription = Subscription(subproc)
                 deployer = Deployer(subproc, subscription)
-                assert deployer.get_deployment_output_param("Ref:azurite-sample.rg-azurite-sample-01.azurite_automation_storage:storageLocation", "azurite-sample") == "australiaeast"
+                assert deployer.get_deployment_output_param("Ref:services-prod.rg-azurite-sample-01.azurite_automation_storage:storageLocation", "services-prod") == "australiaeast"
+                get_stack.assert_called_with("services-prod.rg-azurite-sample-01.azurite_automation_storage", "rg-azurite-sample-01")
 
 def test_get_reference_scope():
     subproc = Subproc()
     subscription = Subscription(subproc)
     deployer = Deployer(subproc, subscription)
-    assert deployer.get_reference_scope("services-prod.policy.allowed-locations") == "subscription"
-    assert deployer.get_reference_scope("services-prod.rg-azurite-sample-01.azurite_automation_storage") == "resource_group"
+    assert deployer.get_reference_scope("services-prod/policy/allowed-locations.yaml") == "subscription"
+    assert deployer.get_reference_scope("services-prod/rg-azurite-sample-01/azurite_automation_storage.yaml") == "resource_group"
 
 def test_build_parameters():
     with patch.object(Deployer, 'get_deployment_output_param', return_value = "australiaeast"):

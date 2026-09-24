@@ -163,8 +163,14 @@ params:
 
 #### Referencing Other Deployment Outputs
 
-Any parameter in the config file prefixes with `Ref:` is a reference to an output from a different deployment. The format for referencing an output from a different deployment is:
-`<Ref>:<deployment_path>:<output_name>` where the `deployment_path` replaces `/` with `.`.
+Any parameter in the config file prefixed with `Ref:` is a reference to an output from a different deployment. The format is the path of the other configuration file (relative to `configuration/`, without `.yaml`) followed by the output name:
+
+```
+params:
+  location: Ref:Subscription_1/Resource_Group_1/config_2:storageLocation
+```
+
+The original dotted form, `Ref:Subscription_1.Resource_Group_1.config_2:storageLocation`, also still works. If a subscription, resource group or config name itself contains a dot and the dotted form could match more than one configuration file, Azurite will ask you to use the `/` form instead.
 
 When referencing the output from a different deployment Azurite will first check if the dependent deployment exists then deploy it if required. If the dependent deployment does exist Azurite will look up the output value and use it for the deployment. deployment hierarchy can be of an arbitrary depth and span across the whole project.
 
