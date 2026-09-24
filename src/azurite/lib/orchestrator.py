@@ -26,6 +26,8 @@ class Orchestrator():
         self.deployer = Deployer(self.subproc, self.subscription)
         self.hook_orchestrator = HookOrchestrator()
         self.deploys = []
+        self.loaded_configs = {}
+        self.reference_checked = set()
 
     def get_deployment_name(self, configuration):
         return configuration.replace("/",".")[:-5]
@@ -113,6 +115,9 @@ class Orchestrator():
         return errors
 
     def load_config(self, config, deploy_mode="deploy"):
+        # Cached so configs visited by the circular reference check are not read and validated twice
+        if (config, deploy_mode) in self.loaded_configs:
+            return self.loaded_configs[(config, deploy_mode)]
         path = f"configuration/{config}"
         loaded = self.load_yaml(path)
         errors = self.validate_config(path, loaded, deploy_mode)
@@ -120,7 +125,22 @@ class Orchestrator():
             self.config_error(path, errors)
         if loaded.get("params") is None:
             loaded["params"] = {}
+        self.loaded_configs[(config, deploy_mode)] = loaded
         return loaded
+
+    def check_circular_references(self, configuration, chain=()):
+        # Walks the Ref: dependencies before anything is deployed, so a cycle fails without running hooks or deployments
+        if configuration in chain:
+            cycle = chain[chain.index(configuration):] + (configuration,)
+            self.logger.error("Circular reference between configurations:\n  " + "\n  -> ".join(cycle))
+            sys.exit(1)
+        if configuration in self.reference_checked:
+            return
+        config = self.load_config(configuration)
+        for value in config["params"].values():
+            if is_reference(value):
+                self.check_circular_references(parse_reference(value).configuration, chain + (configuration,))
+        self.reference_checked.add(configuration)
 
     def load_location(self, config):
         location_path = "configuration/" + config.split("/")[0] + "/" + config.split("/")[1] + "/location.yaml"
@@ -154,6 +174,8 @@ class Orchestrator():
 
     def deploy(self, configuration, deploy_mode="deploy", dry_run=False):
         if configuration not in self.deploys:
+            if deploy_mode == "deploy":
+                self.check_circular_references(configuration)
             self.deploys.append(configuration)
             config = self.load_config(configuration, deploy_mode)
             location = self.load_location(configuration)

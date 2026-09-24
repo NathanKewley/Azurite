@@ -5,6 +5,7 @@ from azurite.lib.orchestrator import Orchestrator
 from azurite.lib.deployer import Deployer
 from azurite.lib.subproc import Subproc
 from azurite.lib.subscription import Subscription
+from azurite.lib.hook_orchestrator import HookOrchestrator
 
 
 orchestrator = Orchestrator()
@@ -172,3 +173,72 @@ def test_dependency_with_dotted_file_name(tmp_path, monkeypatch):
         orchestrator.deploy("sub/rg/app.yaml")
     # the dependency deploys first, from the right file and with the right stack name
     assert [c.args[4] for c in deploy_bicep.call_args_list] == ["sub.rg.storage.v2", "sub.rg.app"]
+
+def make_reference_project(root, references):
+    # references: config name -> list of config names it takes an output from
+    resource_group = root / "configuration" / "sub" / "rg"
+    resource_group.mkdir(parents=True)
+    (root / "bicep").mkdir()
+    (root / "bicep" / "template.bicep").write_text("")
+    (root / "scripts").mkdir()
+    (root / "scripts" / "hook.sh").write_text("exit 0\n")
+    (resource_group / "location.yaml").write_text("---\nlocation: australiaeast\n")
+    for name, dependencies in references.items():
+        params = "".join(f"  from_{dependency}: Ref:sub.rg.{dependency}:output\n" for dependency in dependencies)
+        (resource_group / f"{name}.yaml").write_text(
+            f"---\nbicep_path: template.bicep\npre_hooks:\n  BashScript: hook.sh\nparams:\n  name: {name}\n{params}")
+
+def deployed_configs(deploy_bicep):
+    return [c.args[4] for c in deploy_bicep.call_args_list]
+
+def test_circular_reference_stops_before_anything_runs(tmp_path, monkeypatch, capfd):
+    # b also depends on an unrelated config that would otherwise deploy before the cycle is hit
+    make_reference_project(tmp_path, {"a": ["b"], "b": ["unrelated", "a"], "unrelated": []})
+    monkeypatch.chdir(tmp_path)
+    with patch.object(Subscription, 'set_subscription'), \
+         patch.object(Deployer, 'deploy_bicep') as deploy_bicep, \
+         patch.object(HookOrchestrator, 'run_hooks') as run_hooks:
+        with pytest.raises(SystemExit) as e:
+            Orchestrator().deploy("sub/rg/a.yaml")
+    assert e.value.code == 1
+    deploy_bicep.assert_not_called()
+    run_hooks.assert_not_called()
+    assert "Circular reference between configurations:\n  sub/rg/a.yaml\n  -> sub/rg/b.yaml\n  -> sub/rg/a.yaml" in capfd.readouterr().err
+
+def test_self_reference(tmp_path, monkeypatch, capfd):
+    make_reference_project(tmp_path, {"a": ["a"]})
+    monkeypatch.chdir(tmp_path)
+    with patch.object(Deployer, 'deploy_bicep') as deploy_bicep:
+        with pytest.raises(SystemExit):
+            Orchestrator().deploy("sub/rg/a.yaml")
+    deploy_bicep.assert_not_called()
+    assert "sub/rg/a.yaml\n  -> sub/rg/a.yaml" in capfd.readouterr().err
+
+def test_circular_reference_in_bulk_deploy(tmp_path, monkeypatch, capfd):
+    make_reference_project(tmp_path, {"a": ["b"], "b": ["c"], "c": ["a"]})
+    monkeypatch.chdir(tmp_path)
+    with patch.object(Subscription, 'set_subscription'), \
+         patch.object(Deployer, 'deploy_bicep') as deploy_bicep, \
+         patch.object(HookOrchestrator, 'run_hooks'):
+        with pytest.raises(SystemExit):
+            Orchestrator().deploy_resource_group("sub/rg")
+    deploy_bicep.assert_not_called()
+    assert "sub/rg/a.yaml\n  -> sub/rg/b.yaml\n  -> sub/rg/c.yaml\n  -> sub/rg/a.yaml" in capfd.readouterr().err
+
+def test_shared_dependency_is_not_circular(tmp_path, monkeypatch):
+    # a -> b -> d and a -> c -> d is a diamond, not a cycle
+    make_reference_project(tmp_path, {"a": ["b", "c"], "b": ["d"], "c": ["d"], "d": []})
+    monkeypatch.chdir(tmp_path)
+    with patch.object(Subscription, 'set_subscription'), \
+         patch.object(Deployer, 'deploy_bicep') as deploy_bicep, \
+         patch.object(HookOrchestrator, 'run_hooks'):
+        Orchestrator().deploy("sub/rg/a.yaml")
+    assert deployed_configs(deploy_bicep) == ["sub.rg.d", "sub.rg.b", "sub.rg.c", "sub.rg.a"]
+
+def test_destroy_ignores_references(tmp_path, monkeypatch):
+    make_reference_project(tmp_path, {"a": ["b"], "b": ["a"]})
+    monkeypatch.chdir(tmp_path)
+    with patch.object(Orchestrator, 'stack_exists', return_value = True), \
+         patch.object(Deployer, 'destroy_bicep') as destroy_bicep:
+        Orchestrator().destroy_resource_group("sub/rg")
+    assert [c.args[1] for c in destroy_bicep.call_args_list] == ["sub.rg.a", "sub.rg.b"]
