@@ -55,11 +55,16 @@ class Subproc():
         self.logger.debug(f"command: {azure_cli_command}")
         return self.run_command_with_exit_code(azure_cli_command)        
 
-    def get_deployment_output(self, deployment_name, resource_group, output_name):
-        azure_cli_command = f"az stack group show --name {deployment_name} --resource-group {resource_group} --output json"
-        self.logger.debug(f"Getting Deployment Output: {deployment_name}:{output_name}")
-        self.logger.debug(f"Azure Command: {azure_cli_command}")
-        return self.run_command(azure_cli_command)
+    def get_stack(self, deployment_name, resource_group=None):
+        # Subscription scoped stacks have no resource group
+        if resource_group is None:
+            azure_cli_command = f"az stack sub show --name {deployment_name} --output json"
+        else:
+            azure_cli_command = f"az stack group show --name {deployment_name} --resource-group {resource_group} --output json"
+        self.logger.debug(f"command: {azure_cli_command}")
+        # stdout only, az writes warnings to stderr which would break json parsing
+        result = subprocess.run(azure_cli_command.split(' '), capture_output=True, text=True, check=False)
+        return result.returncode, result.stdout
 
     def list_subscriptions(self):
         return self.run_command("az account list --output json")

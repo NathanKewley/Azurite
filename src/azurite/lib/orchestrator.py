@@ -1,6 +1,7 @@
 import yaml
 import json
 import os
+import sys
 
 from azurite.lib.subproc import Subproc
 from azurite.lib.logger import Logger as logger
@@ -41,17 +42,12 @@ class Orchestrator():
             location = yaml.load(file, Loader=yaml.FullLoader)        
             return(location['location'])
 
-    def get_deployment(self, deployment_name, resource_group):
-        # This needs to move to subproc
-        azure_cli_command = f"az stack group show --name {deployment_name} --resource-group {resource_group}"
-        result = ""
-        try:
-            result = self.subproc.run_command(azure_cli_command)
-        except:
-            self.logger.error(f"Error running: {azure_cli_command}")
-        if "\"provisioningState\": \"succeeded\"" in result:
-            return True
-        return False
+    def stack_exists(self, deployment_name, resource_group, subscription, scope):
+        self.subscription.set_subscription(subscription)
+        if scope == "subscription":
+            resource_group = None
+        returncode, _ = self.subproc.get_stack(deployment_name, resource_group)
+        return returncode == 0
 
     def check_deployment_dependancy(self, value, subscription):
         deployment_name = value.split(":")[1]
@@ -92,6 +88,10 @@ class Orchestrator():
                 deny_settings_mode = config["deny_settings_mode"]
             else:
                 deny_settings_mode = "None"
+            scope = config.get("scope", "resource_group")
+            if scope not in ("resource_group", "subscription"):
+                self.logger.error(f"Invalid scope '{scope}' in {configuration}, must be 'resource_group' or 'subscription'")
+                sys.exit(1)
 
             # deploy dependant deployments before this one
             # destroy does not need to be ordered by params
@@ -110,22 +110,17 @@ class Orchestrator():
 
                 # Run main deployment
                 if deploy_mode == "deploy":
-                    if 'scope' in config:
-                        if config['scope'] == 'subscription':
-                                self.deployer.deploy_bicep_subscription(config['params'], config['bicep_path'], location, deployment_name, action_on_unmanage, deny_settings_mode, subscription)   
-                        if config['scope'] == 'resource_group':     
-                            self.deployer.deploy_bicep(config['params'], config['bicep_path'], resource_group, location, deployment_name, action_on_unmanage, deny_settings_mode, subscription)
+                    if scope == "subscription":
+                        self.deployer.deploy_bicep_subscription(config['params'], config['bicep_path'], location, deployment_name, action_on_unmanage, deny_settings_mode, subscription)
                     else:
                         self.deployer.deploy_bicep(config['params'], config['bicep_path'], resource_group, location, deployment_name, action_on_unmanage, deny_settings_mode, subscription)
                 elif deploy_mode == "destroy":
-                    if self.get_deployment(deployment_name, resource_group):
-                        if 'scope' in config:
-                            if config['scope'] == 'subscription':
-                                self.deployer.destroy_bicep_subscription(deployment_name, subscription, action_on_unmanage)   
-                            if config['scope'] == 'resource_group':     
-                                self.deployer.destroy_bicep(resource_group, deployment_name, subscription, action_on_unmanage)
-                        else:
-                            self.deployer.destroy_bicep(resource_group, deployment_name, subscription, action_on_unmanage)
+                    if not self.stack_exists(deployment_name, resource_group, subscription, scope):
+                        self.logger.info(f"Stack not found, skipping destroy: {deployment_name}\n")
+                    elif scope == "subscription":
+                        self.deployer.destroy_bicep_subscription(deployment_name, subscription, action_on_unmanage)
+                    else:
+                        self.deployer.destroy_bicep(resource_group, deployment_name, subscription, action_on_unmanage)
 
                 # Run post-delpoy hooks
                 if ('post_hooks' in config.keys()) and deploy_mode == "deploy":

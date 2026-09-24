@@ -2,6 +2,7 @@ import json
 import os
 import sys
 import tempfile
+import yaml
 
 from azurite.lib.logger import Logger as logger
 from azurite.lib.subscription import Subscription
@@ -23,27 +24,35 @@ class Deployer():
     def create_resource_group(self, resource_group, location):
         self.subproc.create_resource_group(resource_group, location)
 
-    def get_deployment_output(self, deployment_name, output_name, resource_group):
-        result = json.loads(self.subproc.get_deployment_output(deployment_name, resource_group, output_name))
-        if not result:
-            self.logger.error(f"DEPLOYMENT NOT FOUND: {deployment_name}")
-            sys.exit(1)            
-        if "could not be found" in result:
+    def get_reference_scope(self, deployment_name):
+        config_path = "configuration/" + deployment_name.replace(".", "/") + ".yaml"
+        with open(config_path) as file:
+            config = yaml.safe_load(file)
+        return config.get("scope", "resource_group")
+
+    def get_deployment_output(self, deployment_name, output_name, resource_group, scope="resource_group"):
+        self.logger.debug(f"Getting Deployment Output: {deployment_name}:{output_name}")
+        if scope == "subscription":
+            resource_group = None
+        returncode, result = self.subproc.get_stack(deployment_name, resource_group)
+        if returncode != 0:
             self.logger.error(f"DEPLOYMENT NOT FOUND: {deployment_name}")
             sys.exit(1)
-        if not result["outputs"][output_name]:
+        outputs = json.loads(result).get("outputs") or {}
+        if output_name not in outputs:
             self.logger.error(f"Deployment output not found: {deployment_name}:{output_name}")
-            sys.exit(1)                            
-        return(result["outputs"][output_name]["value"])
+            sys.exit(1)
+        return(outputs[output_name]["value"])
 
     def get_deployment_output_param(self, value, subscription):
         deployment_name = value.split(":")[1]
         output_name = value.split(":")[2]
         resource_group = value.split(":")[1][1:].split(".")[1]
         parameter_subscription = value.split(":")[1].split(".")[0]
+        scope = self.get_reference_scope(deployment_name)
 
         self.subscription.set_subscription(parameter_subscription)
-        value = self.get_deployment_output(deployment_name, output_name, resource_group)
+        value = self.get_deployment_output(deployment_name, output_name, resource_group, scope)
         self.subscription.set_subscription(subscription)
         return value
 

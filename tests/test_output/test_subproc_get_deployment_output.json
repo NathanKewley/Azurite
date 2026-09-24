@@ -35,21 +35,6 @@
           "resourceGroup": "rg-azurite-sample-01"
         }
       ],
-      "outputs": {
-        "storageEndpoint": {
-          "type": "Object",
-          "value": {
-            "blob": "https://azurisampleorekew.blob.core.windows.net/",
-            "file": "https://azurisampleorekew.file.core.windows.net/",
-            "queue": "https://azurisampleorekew.queue.core.windows.net/",
-            "table": "https://azurisampleorekew.table.core.windows.net/"
-          }
-        },
-        "storageLocation": {
-          "type": "String",
-          "value": "australiaeast"
-        }
-      },
       "parameters": {
         "containerName": {
           "type": "String",
@@ -111,6 +96,21 @@
       "timestamp": "2021-05-01T03:21:15.146105+00:00",
       "validatedResources": null
     },
+      "outputs": {
+        "storageEndpoint": {
+          "type": "Object",
+          "value": {
+            "blob": "https://azurisampleorekew.blob.core.windows.net/",
+            "file": "https://azurisampleorekew.file.core.windows.net/",
+            "queue": "https://azurisampleorekew.queue.core.windows.net/",
+            "table": "https://azurisampleorekew.table.core.windows.net/"
+          }
+        },
+        "storageLocation": {
+          "type": "String",
+          "value": "australiaeast"
+        }
+      },
     "resourceGroup": "rg-azurite-sample-01",
     "tags": null,
     "type": "Microsoft.Resources/deployments"
