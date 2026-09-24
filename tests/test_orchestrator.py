@@ -327,3 +327,82 @@ def test_destroy_checks_every_config_before_destroying(tmp_path, monkeypatch, ca
             Orchestrator().destroy_resource_group("sub/rg")
     destroy_bicep.assert_not_called()
     assert "configuration/sub/rg/c.yaml" in capfd.readouterr().err
+
+def make_shared_storage_project(root, storage_settings="", app_folder="sub/rg"):
+    # storage is a shared dependency with a pre-hook, app takes an output from it
+    (root / "bicep").mkdir()
+    (root / "bicep" / "template.bicep").write_text("")
+    (root / "scripts").mkdir()
+    (root / "scripts" / "hook.sh").write_text("exit 0\n")
+    for folder in {"sub/rg", app_folder}:
+        (root / "configuration" / folder).mkdir(parents=True, exist_ok=True)
+        (root / "configuration" / folder / "location.yaml").write_text("---\nlocation: australiaeast\n")
+    (root / "configuration" / "sub" / "rg" / "storage.yaml").write_text(
+        f"---\nbicep_path: template.bicep\n{storage_settings}pre_hooks:\n  BashScript: hook.sh\nparams:\n  name: storage\n")
+    (root / "configuration" / app_folder / "app.yaml").write_text(
+        "---\nbicep_path: template.bicep\nparams:\n  location: Ref:sub/rg/storage:storageLocation\n")
+
+def run_deploy(method, *args, stack_state="succeeded"):
+    stack = (0, f'{{"provisioningState": "{stack_state}"}}') if stack_state else (3, "")
+    with patch.object(Subscription, 'set_subscription'), \
+         patch.object(Subproc, 'get_stack', return_value = stack), \
+         patch.object(Deployer, 'deploy_bicep') as deploy_bicep, \
+         patch.object(HookOrchestrator, 'run_hooks') as run_hooks:
+        getattr(Orchestrator(), method)(*args)
+    return deployed_configs(deploy_bicep), run_hooks.call_count
+
+def test_dependency_redeployed_by_default(tmp_path, monkeypatch):
+    make_shared_storage_project(tmp_path)
+    monkeypatch.chdir(tmp_path)
+    deployed, hooks_run = run_deploy("deploy", "sub/rg/app.yaml")
+    assert deployed == ["sub.rg.storage", "sub.rg.app"]
+    assert hooks_run == 1
+
+def test_dependency_skipped_when_opted_out_and_deployed(tmp_path, monkeypatch, capfd):
+    make_shared_storage_project(tmp_path, "redeploy_as_dependency: false\n")
+    monkeypatch.chdir(tmp_path)
+    deployed, hooks_run = run_deploy("deploy", "sub/rg/app.yaml")
+    assert deployed == ["sub.rg.app"]
+    assert hooks_run == 0
+    assert "Skipping sub/rg/storage.yaml: already deployed and redeploy_as_dependency is false" in capfd.readouterr().err
+
+@pytest.mark.parametrize("stack_state", [None, "failed", "deploying"])
+def test_opted_out_dependency_deployed_when_not_successfully_deployed(tmp_path, monkeypatch, stack_state):
+    make_shared_storage_project(tmp_path, "redeploy_as_dependency: false\n")
+    monkeypatch.chdir(tmp_path)
+    deployed, hooks_run = run_deploy("deploy", "sub/rg/app.yaml", stack_state=stack_state)
+    assert deployed == ["sub.rg.storage", "sub.rg.app"]
+    assert hooks_run == 1
+
+def test_opted_out_dependency_deployed_when_explicitly_requested(tmp_path, monkeypatch):
+    make_shared_storage_project(tmp_path, "redeploy_as_dependency: false\n")
+    monkeypatch.chdir(tmp_path)
+    deployed, _ = run_deploy("deploy", "sub/rg/storage.yaml")
+    assert deployed == ["sub.rg.storage"]
+
+@pytest.mark.parametrize("method, args", [
+    ("deploy_resource_group", ("sub/rg",)),
+    ("deploy_subscription", ("sub",)),
+    ("deploy_account", ()),
+])
+def test_opted_out_dependency_deployed_when_in_bulk_scope(tmp_path, monkeypatch, method, args):
+    # app sorts before storage, so storage is first reached as a dependency, it must still deploy, and before app
+    make_shared_storage_project(tmp_path, "redeploy_as_dependency: false\n")
+    monkeypatch.chdir(tmp_path)
+    deployed, hooks_run = run_deploy(method, *args)
+    assert deployed == ["sub.rg.storage", "sub.rg.app"]
+    assert hooks_run == 1
+
+def test_opted_out_dependency_outside_bulk_scope_is_skipped(tmp_path, monkeypatch):
+    make_shared_storage_project(tmp_path, "redeploy_as_dependency: false\n", app_folder="sub/rg-app")
+    monkeypatch.chdir(tmp_path)
+    deployed, hooks_run = run_deploy("deploy_resource_group", "sub/rg-app")
+    assert deployed == ["sub.rg-app.app"]
+    assert hooks_run == 0
+
+def test_redeploy_as_dependency_must_be_boolean(tmp_path, monkeypatch, capfd):
+    make_shared_storage_project(tmp_path, "redeploy_as_dependency: no-thanks\n")
+    monkeypatch.chdir(tmp_path)
+    with pytest.raises(SystemExit):
+        Orchestrator().load_config("sub/rg/storage.yaml")
+    assert "'redeploy_as_dependency' must be true or false" in capfd.readouterr().err

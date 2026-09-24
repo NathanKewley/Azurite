@@ -12,7 +12,7 @@ from azurite.lib.hook_orchestrator import HookOrchestrator
 from azurite.lib import hooks
 from azurite.lib.reference import InvalidReference, is_reference, parse_reference
 
-CONFIG_KEYS = {"bicep_path", "scope", "params", "action_on_unmanage", "deny_settings_mode", "pre_hooks", "post_hooks"}
+CONFIG_KEYS = {"bicep_path", "scope", "params", "action_on_unmanage", "deny_settings_mode", "pre_hooks", "post_hooks", "redeploy_as_dependency"}
 SCOPES = ("resource_group", "subscription")
 HOOK_TYPES = sorted(module.name for module in pkgutil.iter_modules(hooks.__path__) if module.name != "hook_base")
 
@@ -28,6 +28,8 @@ class Orchestrator():
         self.deploys = []
         self.loaded_configs = {}
         self.reference_checked = set()
+        # Configs explicitly asked for in this run, these are always deployed even when also reached as a dependency
+        self.targets = set()
 
     def get_deployment_name(self, configuration):
         return configuration.replace("/",".")[:-5]
@@ -80,6 +82,9 @@ class Orchestrator():
 
         if config.get("scope", "resource_group") not in SCOPES:
             errors.append(f"'scope' must be 'resource_group' or 'subscription', got '{config['scope']}'")
+
+        if not isinstance(config.get("redeploy_as_dependency", True), bool):
+            errors.append("'redeploy_as_dependency' must be true or false")
 
         if config.get("params") is not None and not isinstance(config["params"], dict):
             errors.append("'params' must be a mapping of parameter names to values")
@@ -158,21 +163,25 @@ class Orchestrator():
         returncode, _ = self.subproc.get_stack(deployment_name, resource_group)
         return returncode == 0
 
+    def stack_deployed(self, deployment_name, resource_group, subscription, scope):
+        # Only a stack that last deployed successfully is sure to have its outputs
+        self.subscription.set_subscription(subscription)
+        if scope == "subscription":
+            resource_group = None
+        returncode, output = self.subproc.get_stack(deployment_name, resource_group)
+        if returncode != 0:
+            return False
+        return str(json.loads(output).get("provisioningState", "")).lower() == "succeeded"
+
     def check_deployment_dependancy(self, value, subscription):
         reference = parse_reference(value)
-        # if not self.stack_exists(reference.deployment_name, reference.resource_group, reference.subscription, scope):
-        #     self.logger.info("Deployment has dependencies. Resolving...")
-        #     self.deploy(reference.configuration)
-
-        # We are going to deploy regardless here as it will update existing deployments.
-        # If no changes then this still takes about 30 sec per stack so in undesirable.
-        # maybe we can convert the bicep to be deployed to ARM and call the existing deployment
-        # do a diff and only re-deploy if there are changes?
+        # Dependencies are redeployed so their hooks run and outputs are current, unless the
+        # dependency sets 'redeploy_as_dependency: false' (see deploy)
         self.logger.info("Deployment has dependencies. Resolving...")
-        self.deploy(reference.configuration)
+        self.deploy(reference.configuration, as_dependency=True)
         self.subscription.set_subscription(subscription)
 
-    def deploy(self, configuration, deploy_mode="deploy", dry_run=False):
+    def deploy(self, configuration, deploy_mode="deploy", dry_run=False, as_dependency=False):
         if configuration not in self.deploys:
             if deploy_mode == "deploy":
                 self.check_circular_references(configuration)
@@ -193,6 +202,14 @@ class Orchestrator():
             else:
                 deny_settings_mode = "None"
             scope = config.get("scope", "resource_group")
+
+            # A config only reached through a Ref: can opt out of being redeployed when it is already deployed
+            if (as_dependency and deploy_mode == "deploy" and not dry_run
+                    and configuration not in self.targets
+                    and not config.get("redeploy_as_dependency", True)
+                    and self.stack_deployed(deployment_name, resource_group, subscription, scope)):
+                self.logger.info(f"Skipping {configuration}: already deployed and redeploy_as_dependency is false\n")
+                return
 
             # deploy dependant deployments before this one
             # destroy does not need to be ordered by params
@@ -234,6 +251,8 @@ class Orchestrator():
 
         subscription = self.get_subscription(configuration)
         resource_group = self.get_resource_group(configuration)
+        if deploy_mode == "deploy" and not dry_run:
+            self.targets.update(self.collect_configurations(subscription, resource_group))
         deployments = self.get_configurations(f"configuration/{configuration}/")
         for deployment in deployments:
             if not dry_run:
@@ -245,6 +264,8 @@ class Orchestrator():
 
     def deploy_subscription(self, configuration, deploy_mode="deploy", dry_run=False):
         test_results = []
+        if deploy_mode == "deploy" and not dry_run:
+            self.targets.update(self.collect_configurations(configuration))
         resource_groups = self.get_child_directories(f"configuration/{configuration}/")
         for resource_group in resource_groups:
             if not dry_run:
@@ -256,6 +277,8 @@ class Orchestrator():
 
     def deploy_account(self, deploy_mode="deploy", dry_run=False):
         test_results = []
+        if deploy_mode == "deploy" and not dry_run:
+            self.targets.update(self.collect_configurations())
         subscriptions = self.get_child_directories("configuration/")
         for subscription in subscriptions:
             if not dry_run:

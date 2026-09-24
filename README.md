@@ -172,7 +172,17 @@ params:
 
 The original dotted form, `Ref:Subscription_1.Resource_Group_1.config_2:storageLocation`, also still works. If a subscription, resource group or config name itself contains a dot and the dotted form could match more than one configuration file, Azurite will ask you to use the `/` form instead.
 
-When referencing the output from a different deployment Azurite will first check if the dependent deployment exists then deploy it if required. If the dependent deployment does exist Azurite will look up the output value and use it for the deployment. deployment hierarchy can be of an arbitrary depth and span across the whole project.
+When a configuration references the output of another deployment, Azurite deploys that other configuration first (including its hooks) and then looks up the output value. Deployment hierarchy can be of an arbitrary depth and span across the whole project. Circular references are detected and stop the deploy before anything runs.
+
+By default a dependency is redeployed every time something that references it is deployed, so its hooks run and its outputs are current. To skip that, set `redeploy_as_dependency: false` in the referenced configuration:
+
+```
+---
+bicep_path: storage/storage_account.bicep
+redeploy_as_dependency: false
+```
+
+When a configuration is only being deployed because another configuration references it, and its stack is already deployed successfully, Azurite will then use the existing outputs rather than redeploying it. It is still deployed if its stack does not exist or last failed, and it is always deployed when it is part of what you asked to deploy (e.g. it is in the resource group passed to `deploy-resource-group`).
 
 If the resource group for a deployment does not exist Azurite will create it for you using the location specified by the `location.yaml` file.
 
