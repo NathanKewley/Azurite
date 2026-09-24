@@ -1,4 +1,5 @@
 from unittest.mock import patch
+import pytest
 import json
 import subprocess
 
@@ -73,3 +74,24 @@ def test_hooks_pass_script_as_one_argument():
         assert run.call_args[0][0] == ["sh", "scripts/my hook.sh"]
         PythonHook(subproc.logger, "my hook.py").execute_hook()
         assert run.call_args[0][0] == ["python3", "scripts/my hook.py"]
+
+def test_az_not_installed():
+    with patch("subprocess.run", side_effect = FileNotFoundError(2, "No such file or directory", "az")):
+        with pytest.raises(SystemExit) as e:
+            subproc.get_current_subscription()
+        assert e.value.code == 1
+
+def test_hook_interpreter_not_installed():
+    with patch("subprocess.run", side_effect = FileNotFoundError(2, "No such file or directory", "python3")):
+        with pytest.raises(SystemExit) as e:
+            subproc.run_command_exit_code(["python3", "scripts/hook.py"])
+        assert e.value.code == 1
+
+def test_resource_group_exists():
+    with patch("subprocess.run", return_value = completed([], 0, "true\n", "WARNING: something")) as run:
+        assert subproc.resource_group_exists("rg") == (0, "true\n")
+        assert run.call_args[0][0] == ["az", "group", "exists", "--name", "rg"]
+
+def test_resource_group_exists_returns_error_on_failure():
+    with patch("subprocess.run", return_value = completed([], 1, "", "ERROR: AADSTS700082: The refresh token has expired")):
+        assert subproc.resource_group_exists("rg") == (1, "ERROR: AADSTS700082: The refresh token has expired")

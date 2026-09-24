@@ -9,14 +9,45 @@ from azurite.lib.subscription import Subscription
 
 
 def test_resource_group_exists():
-    sample_azure_response = open('tests/test_output/test_subproc_get_resource_groups.json', 'r').read()
-    with patch.object(Subproc, 'get_resource_groups', return_value = sample_azure_response):
-        subproc = Subproc()
-        subscription = Subscription(subproc)
-        deployer = Deployer(subproc, subscription)
-
+    subproc = Subproc()
+    subscription = Subscription(subproc)
+    deployer = Deployer(subproc, subscription)
+    with patch.object(Subproc, 'resource_group_exists', return_value = (0, "true\n")):
         assert deployer.resource_group_exists("rg-azurite-sample-01")
+    with patch.object(Subproc, 'resource_group_exists', return_value = (0, "false\n")):
         assert not deployer.resource_group_exists("rg-azurite-sample-02")
+
+def test_resource_group_exists_az_error():
+    subproc = Subproc()
+    subscription = Subscription(subproc)
+    deployer = Deployer(subproc, subscription)
+    with patch.object(Subproc, 'resource_group_exists', return_value = (1, "ERROR: AADSTS700082: The refresh token has expired")):
+        with pytest.raises(SystemExit) as e:
+            deployer.resource_group_exists("rg-azurite-sample-01")
+        assert e.value.code == 1
+
+def test_create_resource_group_failure():
+    subproc = Subproc()
+    subscription = Subscription(subproc)
+    deployer = Deployer(subproc, subscription)
+    with patch.object(Subproc, 'create_resource_group', return_value = (1, "ERROR: AuthorizationFailed")):
+        with pytest.raises(SystemExit) as e:
+            deployer.create_resource_group("rg-azurite-sample-01", "australiaeast")
+        assert e.value.code == 1
+
+def test_deploy_bicep_stops_when_resource_group_check_fails():
+    subproc = Subproc()
+    subscription = Subscription(subproc)
+    deployer = Deployer(subproc, subscription)
+    with patch.object(Subscription, 'set_subscription'), \
+         patch.object(Subproc, 'resource_group_exists', return_value = (1, "ERROR: AADSTS700082: The refresh token has expired")), \
+         patch.object(Subproc, 'create_resource_group') as create_resource_group, \
+         patch.object(Subproc, 'deploy_group_create') as deploy_group_create:
+        with pytest.raises(SystemExit) as e:
+            deployer.deploy_bicep({}, "storage/storage_account.bicep", "rg-azurite-sample-01", "australiaeast", "sub.rg.config", "deleteResources", "None", "services-prod")
+        assert e.value.code == 1
+        create_resource_group.assert_not_called()
+        deploy_group_create.assert_not_called()
 
 def test_get_deployment_output():
     sample_azure_response = open('tests/test_output/test_subproc_get_deployment_output.json', 'r').read()

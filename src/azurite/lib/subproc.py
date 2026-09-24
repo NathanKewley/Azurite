@@ -1,5 +1,6 @@
 import shlex
 import subprocess
+import sys
 
 from azurite.lib.logger import Logger as logger
 
@@ -12,7 +13,14 @@ class Subproc():
     def _run(self, command):
         # Commands are argument lists, each item reaches the process as one argument so values can contain spaces
         self.logger.debug(f"command: {shlex.join(command)}")
-        return subprocess.run(command, capture_output=True, text=True, check=False)
+        try:
+            return subprocess.run(command, capture_output=True, text=True, check=False)
+        except FileNotFoundError:
+            if command[0] == "az":
+                self.logger.error("Azure CLI (az) not found on PATH, is it installed? https://learn.microsoft.com/cli/azure/install-azure-cli")
+            else:
+                self.logger.error(f"'{command[0]}' not found on PATH")
+            sys.exit(1)
 
     def run_command(self, command):
         # stdout only, az writes warnings to stderr which would break json parsing
@@ -25,12 +33,20 @@ class Subproc():
         result = self._run(command)
         return result.returncode, result.stdout + result.stderr
 
-    def get_resource_groups(self):
-        return self.run_command(["az", "group", "list", "--output", "json"])
+    def run_command_output_or_error(self, command):
+        # stdout on success so it can be parsed, or az's error message on failure (e.g. not logged in)
+        result = self._run(command)
+        if result.returncode != 0:
+            return result.returncode, result.stderr
+        return result.returncode, result.stdout
+
+    def resource_group_exists(self, resource_group):
+        # stdout is "true" or "false"
+        return self.run_command_output_or_error(["az", "group", "exists", "--name", resource_group])
 
     def create_resource_group(self, resource_group, location):
         self.logger.info(f"Creating resource group: '{resource_group}' in {location}")
-        self.run_command(["az", "group", "create", "--location", location, "--name", resource_group, "--output", "json"])
+        return self.run_command_with_exit_code(["az", "group", "create", "--location", location, "--name", resource_group, "--output", "json"])
 
     def deploy_group_create(self, bicep, resource_group, deployment_name, action_on_unmanage, deny_settings_mode, parameters_file):
         return self.run_command_with_exit_code([
@@ -87,7 +103,7 @@ class Subproc():
         return self.run_command(["az", "account", "list", "--output", "json"])
 
     def get_current_subscription(self):
-        return self.run_command(["az", "account", "show", "--output", "json"])
+        return self.run_command_output_or_error(["az", "account", "show", "--output", "json"])
 
     def set_subscription(self, subscription_id):
         self.run_command(["az", "account", "set", "--subscription", subscription_id, "--output", "json"])

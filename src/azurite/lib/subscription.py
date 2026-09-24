@@ -12,7 +12,11 @@ class Subscription():
         self.subproc = subproc
 
     def check_if_current(self, subscription_name):
-        subscription = json.loads(self.subproc.get_current_subscription())
+        returncode, output = self.subproc.get_current_subscription()
+        if returncode != 0:
+            self.logger.error(f"Unable to get the current Azure subscription, are you logged in? Run 'az login'.\n{output.strip()}")
+            sys.exit(1)
+        subscription = json.loads(output)
         if subscription_name == subscription["name"]:
             return True
         return False

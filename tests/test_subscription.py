@@ -9,7 +9,7 @@ from azurite.lib.subscription import Subscription
 
 def test_check_if_current():
     sample_azure_response = open('tests/test_output/test_subproc_get_current_subscription.json', 'r').read()
-    with patch.object(Subproc, 'get_current_subscription', return_value = sample_azure_response):
+    with patch.object(Subproc, 'get_current_subscription', return_value = (0, sample_azure_response)):
         subproc = Subproc()
         subscription = Subscription(subproc)
 
@@ -19,7 +19,7 @@ def test_check_if_current():
 def test_set_subscription():
     sample_azure_response = open('tests/test_output/test_subproc_get_current_subscription.json', 'r').read()
     subscriptions = json.dumps([{"name": "azurite-sample", "id": "1111"}, {"name": "services-prod", "id": "2222"}])
-    with patch.object(Subproc, 'get_current_subscription', return_value = sample_azure_response), \
+    with patch.object(Subproc, 'get_current_subscription', return_value = (0, sample_azure_response)), \
          patch.object(Subproc, 'list_subscriptions', return_value = subscriptions), \
          patch.object(Subproc, 'set_subscription') as set_subscription:
         subproc = Subproc()
@@ -33,7 +33,7 @@ def test_set_subscription():
 
 def test_set_subscription_not_found():
     sample_azure_response = open('tests/test_output/test_subproc_get_current_subscription.json', 'r').read()
-    with patch.object(Subproc, 'get_current_subscription', return_value = sample_azure_response), \
+    with patch.object(Subproc, 'get_current_subscription', return_value = (0, sample_azure_response)), \
          patch.object(Subproc, 'list_subscriptions', return_value = "[]"):
         subproc = Subproc()
         subscription = Subscription(subproc)
@@ -56,3 +56,19 @@ def test_set_subscription_with_az_warning():
         subscription = Subscription(subproc)
         subscription.set_subscription("services-prod")
         assert run.call_args[0][0] == ["az", "account", "set", "--subscription", "2222", "--output", "json"]
+
+def test_set_subscription_not_logged_in():
+    not_logged_in = "ERROR: Please run 'az login' to setup account."
+
+    def fake_run(command, **kwargs):
+        return subprocess.CompletedProcess(command, 1, stdout="", stderr=not_logged_in)
+
+    with patch("subprocess.run", side_effect = fake_run) as run:
+        subproc = Subproc()
+        subscription = Subscription(subproc)
+        with pytest.raises(SystemExit) as e:
+            subscription.set_subscription("services-prod")
+        assert e.value.code == 1
+        # stops after az account show, never tries to list or switch subscriptions
+        run.assert_called_once()
+        assert run.call_args[0][0] == ["az", "account", "show", "--output", "json"]

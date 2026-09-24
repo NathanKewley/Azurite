@@ -16,13 +16,17 @@ class Deployer():
         self.subproc = subproc
 
     def resource_group_exists(self, resource_group):
-        groups = self.subproc.get_resource_groups()
-        if f"\"name\": \"{resource_group}\"" in groups:
-            return True
-        return False
+        returncode, output = self.subproc.resource_group_exists(resource_group)
+        if returncode != 0:
+            self.logger.error(f"Unable to check if resource group exists: {resource_group}\n{output.strip()}")
+            sys.exit(1)
+        return output.strip() == "true"
 
     def create_resource_group(self, resource_group, location):
-        self.subproc.create_resource_group(resource_group, location)
+        returncode, output = self.subproc.create_resource_group(resource_group, location)
+        if returncode != 0:
+            self.logger.error(f"Failed to create resource group: {resource_group}\n{output.strip()}")
+            sys.exit(1)
 
     def get_reference_scope(self, deployment_name):
         config_path = "configuration/" + deployment_name.replace(".", "/") + ".yaml"
