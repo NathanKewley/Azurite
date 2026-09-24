@@ -3,9 +3,9 @@ import json
 import os
 import pytest
 
-from azurite.lib.subproc import Subproc
-from azurite.lib.deployer import Deployer
-from azurite.lib.subscription import Subscription
+from nitra.lib.subproc import Subproc
+from nitra.lib.deployer import Deployer
+from nitra.lib.subscription import Subscription
 
 
 def test_resource_group_exists():
@@ -13,9 +13,9 @@ def test_resource_group_exists():
     subscription = Subscription(subproc)
     deployer = Deployer(subproc, subscription)
     with patch.object(Subproc, 'resource_group_exists', return_value = (0, "true\n")):
-        assert deployer.resource_group_exists("rg-azurite-sample-01")
+        assert deployer.resource_group_exists("rg-nitra-sample-01")
     with patch.object(Subproc, 'resource_group_exists', return_value = (0, "false\n")):
-        assert not deployer.resource_group_exists("rg-azurite-sample-02")
+        assert not deployer.resource_group_exists("rg-nitra-sample-02")
 
 def test_resource_group_exists_az_error():
     subproc = Subproc()
@@ -23,7 +23,7 @@ def test_resource_group_exists_az_error():
     deployer = Deployer(subproc, subscription)
     with patch.object(Subproc, 'resource_group_exists', return_value = (1, "ERROR: AADSTS700082: The refresh token has expired")):
         with pytest.raises(SystemExit) as e:
-            deployer.resource_group_exists("rg-azurite-sample-01")
+            deployer.resource_group_exists("rg-nitra-sample-01")
         assert e.value.code == 1
 
 def test_create_resource_group_failure():
@@ -32,7 +32,7 @@ def test_create_resource_group_failure():
     deployer = Deployer(subproc, subscription)
     with patch.object(Subproc, 'create_resource_group', return_value = (1, "ERROR: AuthorizationFailed")):
         with pytest.raises(SystemExit) as e:
-            deployer.create_resource_group("rg-azurite-sample-01", "australiaeast")
+            deployer.create_resource_group("rg-nitra-sample-01", "australiaeast")
         assert e.value.code == 1
 
 def test_deploy_bicep_stops_when_resource_group_check_fails():
@@ -44,7 +44,7 @@ def test_deploy_bicep_stops_when_resource_group_check_fails():
          patch.object(Subproc, 'create_resource_group') as create_resource_group, \
          patch.object(Subproc, 'deploy_group_create') as deploy_group_create:
         with pytest.raises(SystemExit) as e:
-            deployer.deploy_bicep({}, "storage/storage_account.bicep", "rg-azurite-sample-01", "australiaeast", "sub.rg.config", "deleteResources", "None", "services-prod")
+            deployer.deploy_bicep({}, "storage/storage_account.bicep", "rg-nitra-sample-01", "australiaeast", "sub.rg.config", "deleteResources", "None", "services-prod")
         assert e.value.code == 1
         create_resource_group.assert_not_called()
         deploy_group_create.assert_not_called()
@@ -55,8 +55,8 @@ def test_get_deployment_output():
         subproc = Subproc()
         subscription = Subscription(subproc)
         deployer = Deployer(subproc, subscription)
-        assert deployer.get_deployment_output("azurite-sample.rg-azurite-sample-01.azurite_automation_storage", "storageLocation","rg-azurite-sample-01") == "australiaeast"
-        get_stack.assert_called_with("azurite-sample.rg-azurite-sample-01.azurite_automation_storage", "rg-azurite-sample-01")
+        assert deployer.get_deployment_output("nitra-sample.rg-nitra-sample-01.nitra_automation_storage", "storageLocation","rg-nitra-sample-01") == "australiaeast"
+        get_stack.assert_called_with("nitra-sample.rg-nitra-sample-01.nitra_automation_storage", "rg-nitra-sample-01")
 
 def test_get_deployment_output_subscription_scope():
     sample_azure_response = open('tests/test_output/test_subproc_get_deployment_output.json', 'r').read()
@@ -64,8 +64,8 @@ def test_get_deployment_output_subscription_scope():
         subproc = Subproc()
         subscription = Subscription(subproc)
         deployer = Deployer(subproc, subscription)
-        assert deployer.get_deployment_output("azurite-sample.policy.allowed-locations", "storageLocation", "policy", "subscription") == "australiaeast"
-        get_stack.assert_called_with("azurite-sample.policy.allowed-locations", None)
+        assert deployer.get_deployment_output("nitra-sample.policy.allowed-locations", "storageLocation", "policy", "subscription") == "australiaeast"
+        get_stack.assert_called_with("nitra-sample.policy.allowed-locations", None)
 
 def test_get_deployment_output_not_found():
     with patch.object(Subproc, 'get_stack', return_value = (3, "")):
@@ -73,7 +73,7 @@ def test_get_deployment_output_not_found():
         subscription = Subscription(subproc)
         deployer = Deployer(subproc, subscription)
         with pytest.raises(SystemExit) as e:
-            deployer.get_deployment_output("azurite-sample.rg-azurite-sample-01.missing", "storageLocation", "rg-azurite-sample-01")
+            deployer.get_deployment_output("nitra-sample.rg-nitra-sample-01.missing", "storageLocation", "rg-nitra-sample-01")
         assert e.value.code == 1
 
 def test_get_deployment_output_missing_output():
@@ -83,7 +83,7 @@ def test_get_deployment_output_missing_output():
         subscription = Subscription(subproc)
         deployer = Deployer(subproc, subscription)
         with pytest.raises(SystemExit) as e:
-            deployer.get_deployment_output("azurite-sample.rg-azurite-sample-01.azurite_automation_storage", "notAnOutput", "rg-azurite-sample-01")
+            deployer.get_deployment_output("nitra-sample.rg-nitra-sample-01.nitra_automation_storage", "notAnOutput", "rg-nitra-sample-01")
         assert e.value.code == 1
 
 def test_get_deployment_output_param():
@@ -94,15 +94,15 @@ def test_get_deployment_output_param():
                 subproc = Subproc()
                 subscription = Subscription(subproc)
                 deployer = Deployer(subproc, subscription)
-                assert deployer.get_deployment_output_param("Ref:services-prod.rg-azurite-sample-01.azurite_automation_storage:storageLocation", "services-prod") == "australiaeast"
-                get_stack.assert_called_with("services-prod.rg-azurite-sample-01.azurite_automation_storage", "rg-azurite-sample-01")
+                assert deployer.get_deployment_output_param("Ref:services-prod.rg-nitra-sample-01.nitra_automation_storage:storageLocation", "services-prod") == "australiaeast"
+                get_stack.assert_called_with("services-prod.rg-nitra-sample-01.nitra_automation_storage", "rg-nitra-sample-01")
 
 def test_get_reference_scope():
     subproc = Subproc()
     subscription = Subscription(subproc)
     deployer = Deployer(subproc, subscription)
     assert deployer.get_reference_scope("services-prod/policy/allowed-locations.yaml") == "subscription"
-    assert deployer.get_reference_scope("services-prod/rg-azurite-sample-01/azurite_automation_storage.yaml") == "resource_group"
+    assert deployer.get_reference_scope("services-prod/rg-nitra-sample-01/nitra_automation_storage.yaml") == "resource_group"
 
 def test_build_parameters():
     with patch.object(Deployer, 'get_deployment_output_param', return_value = "australiaeast"):
@@ -110,7 +110,7 @@ def test_build_parameters():
         subscription = Subscription(subproc)
         deployer = Deployer(subproc, subscription)
         params = {
-            'location': 'Ref:azurite-sample.rg-azurite-sample-01.azurite_automation_storage:storageLocation',
+            'location': 'Ref:nitra-sample.rg-nitra-sample-01.nitra_automation_storage:storageLocation',
             'storageName': 'azurisampleorekew',
             'displayName': 'Name With Spaces',
             'addressPrefixes': ['10.0.0.0/20', '10.1.0.0/20'],
@@ -118,7 +118,7 @@ def test_build_parameters():
             'enabled': True,
             'count': 3
         }
-        assert deployer.build_parameters(params, "azurite-sample") == {
+        assert deployer.build_parameters(params, "nitra-sample") == {
             'location': {'value': 'australiaeast'},
             'storageName': {'value': 'azurisampleorekew'},
             'displayName': {'value': 'Name With Spaces'},
@@ -132,7 +132,7 @@ def test_write_parameters_file():
     subproc = Subproc()
     subscription = Subscription(subproc)
     deployer = Deployer(subproc, subscription)
-    parameters_file = deployer.write_parameters_file({'allowedLocations': ['australiaeast'], 'enabled': False}, "azurite-sample")
+    parameters_file = deployer.write_parameters_file({'allowedLocations': ['australiaeast'], 'enabled': False}, "nitra-sample")
     try:
         parameters = json.loads(open(parameters_file, 'r').read())
         assert parameters['contentVersion'] == "1.0.0.0"

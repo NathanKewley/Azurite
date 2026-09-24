@@ -1,4 +1,4 @@
-from azurite.lib.subproc import Subproc
+from nitra.lib.subproc import Subproc
 
 class HookBase():
 

@@ -1,6 +1,6 @@
 import sys
 
-from azurite.lib.hooks.hook_base import HookBase
+from nitra.lib.hooks.hook_base import HookBase
 
 
 class Hook(HookBase):

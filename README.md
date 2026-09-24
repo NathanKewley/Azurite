@@ -1,6 +1,6 @@
-# Azurite
+# Nitra
 
-Azurite is an Azure Bicep orchestration tool. The main goal is to separate environment configuration from templates. This is inspired by the AWS Sceptre tool.
+Nitra is an Azure Bicep orchestration tool. The main goal is to separate environment configuration from templates. This is inspired by the AWS Sceptre tool.
 
 There is some additional getting started info in the [wiki](https://github.com/NathanKewley/Azurite/wiki)
 
@@ -41,9 +41,9 @@ There is also a sample project with some examples of usage [here](https://github
 
 * Deploy Azure Policy at MG Level
 
-## Azurite project structure
+## Nitra project structure
 
-An Azurite project is structured in the following way:
+An Nitra project is structured in the following way:
 
 ```
 - root/
@@ -130,7 +130,7 @@ pre_hooks:
   Python3Script: script1.py
 
 params:
-  storageName: storagesampleazurite1
+  storageName: storagesamplenitra1
   containerName: blog
   skuName: Standard_LRS
   location: Ref:Subscription_1/Resource_Group_1/config_2:storageLocation
@@ -170,9 +170,9 @@ params:
   location: Ref:Subscription_1/Resource_Group_1/config_2:storageLocation
 ```
 
-The original dotted form, `Ref:Subscription_1.Resource_Group_1.config_2:storageLocation`, also still works. If a subscription, resource group or config name itself contains a dot and the dotted form could match more than one configuration file, Azurite will ask you to use the `/` form instead.
+The original dotted form, `Ref:Subscription_1.Resource_Group_1.config_2:storageLocation`, also still works. If a subscription, resource group or config name itself contains a dot and the dotted form could match more than one configuration file, Nitra will ask you to use the `/` form instead.
 
-When a configuration references the output of another deployment, Azurite deploys that other configuration first (including its hooks) and then looks up the output value. Deployment hierarchy can be of an arbitrary depth and span across the whole project. Circular references are detected and stop the deploy before anything runs.
+When a configuration references the output of another deployment, Nitra deploys that other configuration first (including its hooks) and then looks up the output value. Deployment hierarchy can be of an arbitrary depth and span across the whole project. Circular references are detected and stop the deploy before anything runs.
 
 By default a dependency is redeployed every time something that references it is deployed, so its hooks run and its outputs are current. To skip that, set `redeploy_as_dependency: false` in the referenced configuration:
 
@@ -182,13 +182,13 @@ bicep_path: storage/storage_account.bicep
 redeploy_as_dependency: false
 ```
 
-When a configuration is only being deployed because another configuration references it, and its stack is already deployed successfully, Azurite will then use the existing outputs rather than redeploying it. It is still deployed if its stack does not exist or last failed, and it is always deployed when it is part of what you asked to deploy (e.g. it is in the resource group passed to `deploy-resource-group`).
+When a configuration is only being deployed because another configuration references it, and its stack is already deployed successfully, Nitra will then use the existing outputs rather than redeploying it. It is still deployed if its stack does not exist or last failed, and it is always deployed when it is part of what you asked to deploy (e.g. it is in the resource group passed to `deploy-resource-group`).
 
-If the resource group for a deployment does not exist Azurite will create it for you using the location specified by the `location.yaml` file.
+If the resource group for a deployment does not exist Nitra will create it for you using the location specified by the `location.yaml` file.
 
 ### location.yaml
 
-This is a super simple file that is required for every resource group. It tells Azurite what location to create the resource group in if it does not exist. Each resource deployed into that resource group inherits the location. An example of a location.yaml:
+This is a super simple file that is required for every resource group. It tells Nitra what location to create the resource group in if it does not exist. Each resource deployed into that resource group inherits the location. An example of a location.yaml:
 
 ```
 ---
@@ -198,13 +198,13 @@ location: australiaeast
 
 ## Usage - Deploying
 
-Azurite is designed to be easy to use and allow scoped control of deployments.
+Nitra is designed to be easy to use and allow scoped control of deployments.
 
 ### Deploying a single configuration
 
 From the root folder of your repository run the following command:
 
-`azurite deploy Subscription_1/Resource_Group_1/storage_account_and_container.yaml`
+`nitra deploy Subscription_1/Resource_Group_1/storage_account_and_container.yaml`
 
 This will deploy a single configuration / template
 
@@ -212,7 +212,7 @@ This will deploy a single configuration / template
 
 From the root folder of your repository run the following command:
 
-`azurite deploy-resource-group Subscription_1/Resource_Group_1`
+`nitra deploy-resource-group Subscription_1/Resource_Group_1`
 
 This will deploy every configuration file under that resource group
 
@@ -220,7 +220,7 @@ This will deploy every configuration file under that resource group
 
 From the root folder of your repository run the following command:
 
-`azurite deploy-subscription Subscription_1`
+`nitra deploy-subscription Subscription_1`
 
 This will deploy each configuration file for each resource group in the specified subscription
 
@@ -228,34 +228,34 @@ This will deploy each configuration file for each resource group in the specifie
 
 From the root folder of your repository run the following command:
 
-`azurite deploy-account`
+`nitra deploy-account`
 
 This will deploy every configuration file in the project to the appropriate subscriptions and resource groups
 
 ## Usage - Destroying
 
-Destroy will NOT destroy resource groups. This is because there could be resources in a resource group not managed by an Azurite stack and we don't want to delete those along with a resource group being deleted.
+Destroy will NOT destroy resource groups. This is because there could be resources in a resource group not managed by an Nitra stack and we don't want to delete those along with a resource group being deleted.
 
 * Destroy will NOT run pre and post hooks.
 * Destroy runs in reverse dependency order: a configuration is destroyed before any configuration it references with `Ref:`, across resource groups and subscriptions within the destroy.
-* If a configuration outside the destroy still references one being destroyed, Azurite logs a warning but does not destroy it.
+* If a configuration outside the destroy still references one being destroyed, Nitra logs a warning but does not destroy it.
 * The scope of these commands is the same as the deploy commands
 
 ### Destroy a single configuration
 
-`azurite destroy Subscription_1/Resource_Group_1/storage_account_and_container.yaml`
+`nitra destroy Subscription_1/Resource_Group_1/storage_account_and_container.yaml`
 
 ### Destroying at resource group scope
 
-`azurite destroy-resource-group Subscription_1/Resource_Group_1`
+`nitra destroy-resource-group Subscription_1/Resource_Group_1`
 
 ### Destroying at subscription scope
 
-`azurite destroy-subscription Subscription_1`
+`nitra destroy-subscription Subscription_1`
 
 ### Destroying at account scope
 
-`azurite destroy-account`
+`nitra destroy-account`
 
 ## Environment Variables
 

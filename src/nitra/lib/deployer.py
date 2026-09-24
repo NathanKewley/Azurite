@@ -4,8 +4,8 @@ import sys
 import tempfile
 import yaml
 
-from azurite.lib.logger import Logger as logger
-from azurite.lib.reference import is_reference, parse_reference
+from nitra.lib.logger import Logger as logger
+from nitra.lib.reference import is_reference, parse_reference
 
 class Deployer():
 
@@ -71,7 +71,7 @@ class Deployer():
             "parameters": self.build_parameters(params, subscription)
         }
         self.logger.debug(f"Deployment Parameters: {json.dumps(parameters_file['parameters'], default=str)}")
-        with tempfile.NamedTemporaryFile(mode="w", prefix="azurite-", suffix=".json", delete=False) as file:
+        with tempfile.NamedTemporaryFile(mode="w", prefix="nitra-", suffix=".json", delete=False) as file:
             json.dump(parameters_file, file, default=str)
         return file.name
 

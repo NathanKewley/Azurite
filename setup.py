@@ -4,7 +4,7 @@ with open("README.md", "r", encoding="utf-8") as fh:
     long_description = fh.read()
 
 setuptools.setup(
-    name="azurite",
+    name="nitra",
     version="0.0.4",
     author="Nath Kewley",
     author_email="nathan.kewley@kubiieo.com",
@@ -27,7 +27,7 @@ setuptools.setup(
     ],
     entry_points={
         'console_scripts': [
-            'azurite = azurite:azurite',
+            'nitra = nitra:nitra',
         ],
     },    
 )

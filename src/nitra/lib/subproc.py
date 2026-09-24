@@ -2,7 +2,7 @@ import shlex
 import subprocess
 import sys
 
-from azurite.lib.logger import Logger as logger
+from nitra.lib.logger import Logger as logger
 
 class Subproc():
 

@@ -4,13 +4,13 @@ import os
 import pkgutil
 import sys
 
-from azurite.lib.subproc import Subproc
-from azurite.lib.logger import Logger as logger
-from azurite.lib.deployer import Deployer
-from azurite.lib.subscription import Subscription
-from azurite.lib.hook_orchestrator import HookOrchestrator
-from azurite.lib import hooks
-from azurite.lib.reference import InvalidReference, is_reference, parse_reference
+from nitra.lib.subproc import Subproc
+from nitra.lib.logger import Logger as logger
+from nitra.lib.deployer import Deployer
+from nitra.lib.subscription import Subscription
+from nitra.lib.hook_orchestrator import HookOrchestrator
+from nitra.lib import hooks
+from nitra.lib.reference import InvalidReference, is_reference, parse_reference
 
 CONFIG_KEYS = {"bicep_path", "scope", "params", "action_on_unmanage", "deny_settings_mode", "pre_hooks", "post_hooks", "redeploy_as_dependency"}
 SCOPES = ("resource_group", "subscription")

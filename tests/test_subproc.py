@@ -3,7 +3,7 @@ import pytest
 import json
 import subprocess
 
-from azurite.lib.subproc import Subproc
+from nitra.lib.subproc import Subproc
 
 
 subproc = Subproc()
@@ -16,7 +16,7 @@ def test_run_command():
     with patch("subprocess.run", return_value = completed([], 0, sample_azure_response, "")) as run:
         run_command_result = json.loads(subproc.run_command(["az", "stack", "group", "show", "--name", "test", "--resource-group", "rg"]))
         run.assert_called_once_with(["az", "stack", "group", "show", "--name", "test", "--resource-group", "rg"], capture_output=True, text=True, check=False)
-    assert run_command_result['name'] == "azurite-sample.rg-azurite-sample-01.azurite_automation_account"
+    assert run_command_result['name'] == "nitra-sample.rg-nitra-sample-01.nitra_automation_account"
     assert run_command_result['properties']['provisioningState'] == "Succeeded"
 
 def test_run_command_ignores_stderr_warnings():
@@ -45,30 +45,30 @@ def test_get_stack_subscription():
 
 def test_deploy_group_create():
     with patch("subprocess.run", return_value = completed([], 0, "{}")) as run:
-        assert subproc.deploy_group_create("storage/storage_account.bicep", "rg", "sub.rg.config", "deleteResources", "None", "/tmp/azurite-params.json") == (0, "{}")
+        assert subproc.deploy_group_create("storage/storage_account.bicep", "rg", "sub.rg.config", "deleteResources", "None", "/tmp/nitra-params.json") == (0, "{}")
         command = run.call_args[0][0]
         assert command[:6] == ["az", "stack", "group", "create", "-f", "bicep/storage/storage_account.bicep"]
-        assert command[command.index("--parameters") + 1] == "@/tmp/azurite-params.json"
+        assert command[command.index("--parameters") + 1] == "@/tmp/nitra-params.json"
 
 def test_deploy_subscription_create():
     with patch("subprocess.run", return_value = completed([], 0, "{}")) as run:
-        assert subproc.deploy_subscription_create("policy/assignAllowedLocations.bicep", "sub.policy.config", "deleteResources", "None", "/tmp/azurite-params.json", "australiaeast") == (0, "{}")
+        assert subproc.deploy_subscription_create("policy/assignAllowedLocations.bicep", "sub.policy.config", "deleteResources", "None", "/tmp/nitra-params.json", "australiaeast") == (0, "{}")
         command = run.call_args[0][0]
         assert command[:4] == ["az", "stack", "sub", "create"]
-        assert command[command.index("--parameters") + 1] == "@/tmp/azurite-params.json"
+        assert command[command.index("--parameters") + 1] == "@/tmp/nitra-params.json"
         assert command[command.index("--location") + 1] == "australiaeast"
 
 def test_deploy_group_create_path_with_spaces():
     with patch("subprocess.run", return_value = completed([], 0, "{}")) as run:
-        subproc.deploy_group_create("My Templates/storage account.bicep", "rg", "sub.rg.config", "deleteResources", "None", "C:\\Users\\Jane Doe\\Temp\\azurite-params.json")
+        subproc.deploy_group_create("My Templates/storage account.bicep", "rg", "sub.rg.config", "deleteResources", "None", "C:\\Users\\Jane Doe\\Temp\\nitra-params.json")
         command = run.call_args[0][0]
         assert command[command.index("-f") + 1] == "bicep/My Templates/storage account.bicep"
-        assert command[command.index("--parameters") + 1] == "@C:\\Users\\Jane Doe\\Temp\\azurite-params.json"
+        assert command[command.index("--parameters") + 1] == "@C:\\Users\\Jane Doe\\Temp\\nitra-params.json"
         assert "" not in command
 
 def test_hooks_pass_script_as_one_argument():
-    from azurite.lib.hooks.BashScript import Hook as BashHook
-    from azurite.lib.hooks.Python3Script import Hook as PythonHook
+    from nitra.lib.hooks.BashScript import Hook as BashHook
+    from nitra.lib.hooks.Python3Script import Hook as PythonHook
     with patch("subprocess.run", return_value = completed([], 0)) as run:
         BashHook(subproc.logger, "my hook.sh").execute_hook()
         assert run.call_args[0][0] == ["sh", "scripts/my hook.sh"]
@@ -103,7 +103,7 @@ def test_check_azure_login_only_returns_expiry():
         assert run.call_args[0][0] == ["az", "account", "get-access-token", "--query", "expiresOn", "--output", "tsv"]
 
 def test_hook_output_is_shown(tmp_path, monkeypatch, capfd):
-    from azurite.lib.hooks.BashScript import Hook as BashHook
+    from nitra.lib.hooks.BashScript import Hook as BashHook
     (tmp_path / "scripts").mkdir()
     (tmp_path / "scripts" / "hook.sh").write_text("echo 'hook stdout line'\necho 'hook stderr line' >&2\n")
     monkeypatch.chdir(tmp_path)
@@ -113,7 +113,7 @@ def test_hook_output_is_shown(tmp_path, monkeypatch, capfd):
     assert "hook stderr line" in captured.err
 
 def test_failing_hook_exits_with_error(tmp_path, monkeypatch, capfd):
-    from azurite.lib.hooks.Python3Script import Hook as PythonHook
+    from nitra.lib.hooks.Python3Script import Hook as PythonHook
     (tmp_path / "scripts").mkdir()
     (tmp_path / "scripts" / "hook.py").write_text("import sys\nprint('checking prerequisites')\nprint('prerequisite missing', file=sys.stderr)\nsys.exit(3)\n")
     monkeypatch.chdir(tmp_path)

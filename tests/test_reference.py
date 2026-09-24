@@ -1,6 +1,6 @@
 import pytest
 
-from azurite.lib.reference import InvalidReference, Reference, is_reference, parse_reference
+from nitra.lib.reference import InvalidReference, Reference, is_reference, parse_reference
 
 
 def make_config(root, *parts):

@@ -33,7 +33,7 @@ class Logger:
         logger = logging.getLogger(logger_name)
         logger.handlers.clear()
         # Case insensitive, e.g. debug, DEBUG or Debug
-        env_level = os.getenv('AZURITE_LOGGING_LEVEL', '').strip().upper()
+        env_level = os.getenv('NITRA_LOGGING_LEVEL', '').strip().upper()
         invalid_level = env_level and not isinstance(logging.getLevelName(env_level), int)
         logger.setLevel(env_level if env_level and not invalid_level else level)
         ch = logging.StreamHandler()
@@ -44,5 +44,5 @@ class Logger:
         logger.addHandler(ch)
         if invalid_level and not _warned_invalid_level:
             _warned_invalid_level = True
-            logger.warning(f"Ignoring invalid AZURITE_LOGGING_LEVEL '{os.getenv('AZURITE_LOGGING_LEVEL')}', expected one of DEBUG, INFO, WARNING, ERROR, CRITICAL")
+            logger.warning(f"Ignoring invalid NITRA_LOGGING_LEVEL '{os.getenv('NITRA_LOGGING_LEVEL')}', expected one of DEBUG, INFO, WARNING, ERROR, CRITICAL")
         return logger
