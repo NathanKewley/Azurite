@@ -1,5 +1,3 @@
-import os
-import sys
 import importlib
 
 from azurite.lib.logger import Logger as logger

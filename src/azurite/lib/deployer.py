@@ -5,7 +5,6 @@ import tempfile
 import yaml
 
 from azurite.lib.logger import Logger as logger
-from azurite.lib.subscription import Subscription
 from azurite.lib.reference import is_reference, parse_reference
 
 class Deployer():

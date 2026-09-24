@@ -1,10 +1,11 @@
+# The version comes from setup.py, installing from source avoids hardcoding the wheel file name
 .PHONY: rebuild
 rebuild:
-	pip3 uninstall dist/azurite-0.0.4-py3-none-any.whl -y && python3 -m build && pip3 install dist/azurite-0.0.4-py3-none-any.whl
+	pip3 uninstall azurite -y && python3 -m build && pip3 install .
 
 .PHONY: build
 build:
-	python3 -m build && pip3 install dist/azurite-0.0.4-py3-none-any.whl
+	python3 -m build && pip3 install --force-reinstall --no-deps .
 
 .PHONY: test
 test:

@@ -1,6 +1,9 @@
 import logging
 import os
 
+LOG_FORMAT = "%(asctime)s - %(name)s - %(levelname)s - %(message)s (%(filename)s:%(lineno)d)"
+_warned_invalid_level = False
+
 class LoggerFormatter(logging.Formatter):
 
     grey = "\x1b[38;21m"
@@ -9,13 +12,12 @@ class LoggerFormatter(logging.Formatter):
     red = "\x1b[31;21m"
     bold_red = "\x1b[31;1m"
     reset = "\x1b[0m"
-    format = "%(asctime)s - %(name)s - %(levelname)s - %(message)s (%(filename)s:%(lineno)d)"
     FORMATS = {
-        logging.DEBUG: grey + format + reset,
-        logging.INFO: green + format + reset,
-        logging.WARNING: yellow + format + reset,
-        logging.ERROR: red + format + reset,
-        logging.CRITICAL: bold_red + format + reset
+        logging.DEBUG: grey + LOG_FORMAT + reset,
+        logging.INFO: green + LOG_FORMAT + reset,
+        logging.WARNING: yellow + LOG_FORMAT + reset,
+        logging.ERROR: red + LOG_FORMAT + reset,
+        logging.CRITICAL: bold_red + LOG_FORMAT + reset
     }
 
     def format(self, record):
@@ -27,15 +29,20 @@ class Logger:
     
     @staticmethod
     def get_logger(logger_name="logging", level=logging.INFO, colour_format=True):
+        global _warned_invalid_level
         logger = logging.getLogger(logger_name)
         logger.handlers.clear()
-        level = os.getenv('AZURITE_LOGGING_LEVEL', level)
-        logger.setLevel(level)
+        # Case insensitive, e.g. debug, DEBUG or Debug
+        env_level = os.getenv('AZURITE_LOGGING_LEVEL', '').strip().upper()
+        invalid_level = env_level and not isinstance(logging.getLevelName(env_level), int)
+        logger.setLevel(env_level if env_level and not invalid_level else level)
         ch = logging.StreamHandler()
         if colour_format:
             ch.setFormatter(LoggerFormatter())
         else:
-            formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s (%(filename)s:%(lineno)d)')
-            ch.setFormatter(formatter)
+            ch.setFormatter(logging.Formatter(LOG_FORMAT))
         logger.addHandler(ch)
+        if invalid_level and not _warned_invalid_level:
+            _warned_invalid_level = True
+            logger.warning(f"Ignoring invalid AZURITE_LOGGING_LEVEL '{os.getenv('AZURITE_LOGGING_LEVEL')}', expected one of DEBUG, INFO, WARNING, ERROR, CRITICAL")
         return logger

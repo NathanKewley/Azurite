@@ -182,70 +182,67 @@ class Orchestrator():
         self.subscription.set_subscription(subscription)
 
     def deploy(self, configuration, deploy_mode="deploy", dry_run=False, as_dependency=False):
-        if configuration not in self.deploys:
-            if deploy_mode == "deploy":
-                self.check_circular_references(configuration)
-            self.deploys.append(configuration)
-            config = self.load_config(configuration, deploy_mode)
-            location = self.load_location(configuration)
-            deployment_name = self.get_deployment_name(configuration)
-            subscription = self.get_subscription(configuration)
-            resource_group = self.get_resource_group(configuration)
+        if configuration in self.deploys:
+            return
+        if deploy_mode == "deploy":
+            self.check_circular_references(configuration)
+        self.deploys.append(configuration)
 
-            # Configuration Settings with defaults
-            if "action_on_unmanage" in config.keys():
-                action_on_unmanage = config["action_on_unmanage"]
-            else:
-                action_on_unmanage = "deleteResources"
-            if "deny_settings_mode" in config.keys():
-                deny_settings_mode = config["deny_settings_mode"]
-            else:
-                deny_settings_mode = "None"
-            scope = config.get("scope", "resource_group")
+        config = self.load_config(configuration, deploy_mode)
+        location = self.load_location(configuration)
+        deployment_name = self.get_deployment_name(configuration)
+        subscription = self.get_subscription(configuration)
+        resource_group = self.get_resource_group(configuration)
+        scope = config.get("scope", "resource_group")
 
-            # A config only reached through a Ref: can opt out of being redeployed when it is already deployed
-            if (as_dependency and deploy_mode == "deploy" and not dry_run
-                    and configuration not in self.targets
-                    and not config.get("redeploy_as_dependency", True)
-                    and self.stack_deployed(deployment_name, resource_group, subscription, scope)):
+        if deploy_mode == "deploy" and not dry_run:
+            if as_dependency and self.can_skip_dependency(configuration, config, deployment_name, resource_group, subscription, scope):
                 self.logger.info(f"Skipping {configuration}: already deployed and redeploy_as_dependency is false\n")
                 return
+            # Deploy the configs this one takes outputs from first, destroy does not need this ordering
+            self.deploy_dependencies(config, subscription)
 
-            # deploy dependant deployments before this one
-            # destroy does not need to be ordered by params
-            if deploy_mode == "deploy":
-                for param, value in config['params'].items():
-                    if is_reference(value) and not dry_run:
-                        self.check_deployment_dependancy(value, subscription)
-
-            self.logger.info(f"{deploy_mode}ing: {configuration} to {subscription}")
-            if not dry_run:
-                # Run pre-delpoy hooks
-                if config.get('pre_hooks') and deploy_mode == "deploy":
-                    self.hook_orchestrator.run_hooks(config['pre_hooks'])
-
-                # Run main deployment
-                if deploy_mode == "deploy":
-                    if scope == "subscription":
-                        self.deployer.deploy_bicep_subscription(config['params'], config['bicep_path'], location, deployment_name, action_on_unmanage, deny_settings_mode, subscription)
-                    else:
-                        self.deployer.deploy_bicep(config['params'], config['bicep_path'], resource_group, location, deployment_name, action_on_unmanage, deny_settings_mode, subscription)
-                elif deploy_mode == "destroy":
-                    if not self.stack_exists(deployment_name, resource_group, subscription, scope):
-                        self.logger.info(f"Stack not found, skipping destroy: {deployment_name}\n")
-                    elif scope == "subscription":
-                        self.deployer.destroy_bicep_subscription(deployment_name, subscription, action_on_unmanage)
-                    else:
-                        self.deployer.destroy_bicep(resource_group, deployment_name, subscription, action_on_unmanage)
-
-                # Run post-delpoy hooks
-                if config.get('post_hooks') and deploy_mode == "deploy":
-                    self.hook_orchestrator.run_hooks(config['post_hooks'])
-            else:
-                return [config['params'], config['bicep_path'], resource_group, location, deployment_name, subscription]
+        self.logger.info(f"{deploy_mode}ing: {configuration} to {subscription}")
+        if dry_run:
+            return [config['params'], config['bicep_path'], resource_group, location, deployment_name, subscription]
+        if deploy_mode == "deploy":
+            self.deploy_stack(config, location, deployment_name, resource_group, subscription, scope)
         else:
-            return
-        
+            self.destroy_stack(config, deployment_name, resource_group, subscription, scope)
+
+    def can_skip_dependency(self, configuration, config, deployment_name, resource_group, subscription, scope):
+        # A config only reached through a Ref: can opt out of being redeployed when it is already deployed,
+        # but never when it is part of what was asked to be deployed
+        return (configuration not in self.targets
+                and not config.get("redeploy_as_dependency", True)
+                and self.stack_deployed(deployment_name, resource_group, subscription, scope))
+
+    def deploy_dependencies(self, config, subscription):
+        for value in config['params'].values():
+            if is_reference(value):
+                self.check_deployment_dependancy(value, subscription)
+
+    def deploy_stack(self, config, location, deployment_name, resource_group, subscription, scope):
+        action_on_unmanage = config.get("action_on_unmanage", "deleteResources")
+        deny_settings_mode = config.get("deny_settings_mode", "None")
+        if config.get('pre_hooks'):
+            self.hook_orchestrator.run_hooks(config['pre_hooks'])
+        if scope == "subscription":
+            self.deployer.deploy_bicep_subscription(config['params'], config['bicep_path'], location, deployment_name, action_on_unmanage, deny_settings_mode, subscription)
+        else:
+            self.deployer.deploy_bicep(config['params'], config['bicep_path'], resource_group, location, deployment_name, action_on_unmanage, deny_settings_mode, subscription)
+        if config.get('post_hooks'):
+            self.hook_orchestrator.run_hooks(config['post_hooks'])
+
+    def destroy_stack(self, config, deployment_name, resource_group, subscription, scope):
+        action_on_unmanage = config.get("action_on_unmanage", "deleteResources")
+        if not self.stack_exists(deployment_name, resource_group, subscription, scope):
+            self.logger.info(f"Stack not found, skipping destroy: {deployment_name}\n")
+        elif scope == "subscription":
+            self.deployer.destroy_bicep_subscription(deployment_name, subscription, action_on_unmanage)
+        else:
+            self.deployer.destroy_bicep(resource_group, deployment_name, subscription, action_on_unmanage)
+
     def deploy_resource_group(self, configuration, deploy_mode="deploy", dry_run=False):
         test_results = []
 
