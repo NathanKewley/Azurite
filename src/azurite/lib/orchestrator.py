@@ -1,6 +1,7 @@
 import yaml
 import json
 import os
+import pkgutil
 import sys
 
 from azurite.lib.subproc import Subproc
@@ -8,6 +9,11 @@ from azurite.lib.logger import Logger as logger
 from azurite.lib.deployer import Deployer
 from azurite.lib.subscription import Subscription
 from azurite.lib.hook_orchestrator import HookOrchestrator
+from azurite.lib import hooks
+
+CONFIG_KEYS = {"bicep_path", "scope", "params", "action_on_unmanage", "deny_settings_mode", "pre_hooks", "post_hooks"}
+SCOPES = ("resource_group", "subscription")
+HOOK_TYPES = sorted(module.name for module in pkgutil.iter_modules(hooks.__path__) if module.name != "hook_base")
 
 class Orchestrator():
 
@@ -46,15 +52,76 @@ class Orchestrator():
                 self.logger.debug(f"Skipping non configuration file: {os.path.join(path, item)}")
         return configurations
 
-    def load_config(self, config):
-        with open(f"configuration/{config}") as file:
-            return yaml.load(file, Loader=yaml.FullLoader)
+    def config_error(self, path, errors):
+        problems = "\n".join(f"  - {error}" for error in errors)
+        self.logger.error(f"Invalid configuration: {path}\n{problems}")
+        sys.exit(1)
+
+    def load_yaml(self, path):
+        if not os.path.isfile(path):
+            self.config_error(path, ["file not found"])
+        try:
+            with open(path) as file:
+                return yaml.safe_load(file)
+        except yaml.YAMLError as e:
+            self.config_error(path, [f"invalid YAML: {e}"])
+
+    def validate_config(self, path, config, deploy_mode):
+        if not isinstance(config, dict):
+            return ["must be a mapping of settings, e.g. 'bicep_path: storage/storage_account.bicep'"]
+        errors = []
+
+        for key in config:
+            if key not in CONFIG_KEYS:
+                self.logger.warning(f"Unknown setting '{key}' in {path} will be ignored, expected one of: {', '.join(sorted(CONFIG_KEYS))}")
+
+        if config.get("scope", "resource_group") not in SCOPES:
+            errors.append(f"'scope' must be 'resource_group' or 'subscription', got '{config['scope']}'")
+
+        if config.get("params") is not None and not isinstance(config["params"], dict):
+            errors.append("'params' must be a mapping of parameter names to values")
+
+        # Destroy only needs the stack name and scope, so a config whose template has been removed can still be destroyed
+        if deploy_mode == "deploy":
+            bicep_path = config.get("bicep_path")
+            if not isinstance(bicep_path, str) or not bicep_path:
+                errors.append("'bicep_path' is required, e.g. 'bicep_path: storage/storage_account.bicep'")
+            elif not os.path.isfile(os.path.join("bicep", bicep_path)):
+                errors.append(f"'bicep_path' file not found: bicep/{bicep_path}")
+
+        for hook_section in ("pre_hooks", "post_hooks"):
+            hook_config = config.get(hook_section)
+            if hook_config is None:
+                continue
+            if not isinstance(hook_config, dict):
+                errors.append(f"'{hook_section}' must be a mapping of hook type to script, e.g. 'BashScript: my_script.sh'")
+                continue
+            for hook_type, script in hook_config.items():
+                if hook_type not in HOOK_TYPES:
+                    errors.append(f"unknown hook type '{hook_type}' in '{hook_section}', expected one of: {', '.join(HOOK_TYPES)}")
+                elif deploy_mode == "deploy" and not os.path.isfile(os.path.join("scripts", str(script))):
+                    errors.append(f"'{hook_section}' script not found: scripts/{script}")
+
+        return errors
+
+    def load_config(self, config, deploy_mode="deploy"):
+        path = f"configuration/{config}"
+        loaded = self.load_yaml(path)
+        errors = self.validate_config(path, loaded, deploy_mode)
+        if errors:
+            self.config_error(path, errors)
+        if loaded.get("params") is None:
+            loaded["params"] = {}
+        return loaded
 
     def load_location(self, config):
         location_path = "configuration/" + config.split("/")[0] + "/" + config.split("/")[1] + "/location.yaml"
-        with open(location_path) as file:
-            location = yaml.load(file, Loader=yaml.FullLoader)        
-            return(location['location'])
+        if not os.path.isfile(location_path):
+            self.config_error(location_path, ["file not found, every resource group folder needs one, e.g. 'location: australiaeast'"])
+        location = self.load_yaml(location_path)
+        if not isinstance(location, dict) or not isinstance(location.get("location"), str) or not location["location"]:
+            self.config_error(location_path, ["'location' is required, e.g. 'location: australiaeast'"])
+        return location["location"]
 
     def stack_exists(self, deployment_name, resource_group, subscription, scope):
         self.subscription.set_subscription(subscription)
@@ -87,7 +154,7 @@ class Orchestrator():
     def deploy(self, configuration, deploy_mode="deploy", dry_run=False):
         if configuration not in self.deploys:
             self.deploys.append(configuration)
-            config = self.load_config(configuration)
+            config = self.load_config(configuration, deploy_mode)
             location = self.load_location(configuration)
             deployment_name = self.get_deployment_name(configuration)
             subscription = self.get_subscription(configuration)
@@ -103,9 +170,6 @@ class Orchestrator():
             else:
                 deny_settings_mode = "None"
             scope = config.get("scope", "resource_group")
-            if scope not in ("resource_group", "subscription"):
-                self.logger.error(f"Invalid scope '{scope}' in {configuration}, must be 'resource_group' or 'subscription'")
-                sys.exit(1)
 
             # deploy dependant deployments before this one
             # destroy does not need to be ordered by params
@@ -119,7 +183,7 @@ class Orchestrator():
             self.logger.info(f"{deploy_mode}ing: {configuration} to {subscription}")
             if not dry_run:
                 # Run pre-delpoy hooks
-                if ('pre_hooks' in config.keys()) and deploy_mode == "deploy":
+                if config.get('pre_hooks') and deploy_mode == "deploy":
                     self.hook_orchestrator.run_hooks(config['pre_hooks'])
 
                 # Run main deployment
@@ -137,7 +201,7 @@ class Orchestrator():
                         self.deployer.destroy_bicep(resource_group, deployment_name, subscription, action_on_unmanage)
 
                 # Run post-delpoy hooks
-                if ('post_hooks' in config.keys()) and deploy_mode == "deploy":
+                if config.get('post_hooks') and deploy_mode == "deploy":
                     self.hook_orchestrator.run_hooks(config['post_hooks'])
             else:
                 return [config['params'], config['bicep_path'], resource_group, location, deployment_name, subscription]

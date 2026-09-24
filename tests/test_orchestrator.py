@@ -140,12 +140,19 @@ def test_stack_exists_not_found():
         assert not orchestrator.stack_exists("services-prod.rg-azurite-sample-02.sample_storage", "rg-azurite-sample-02", "services-prod", "resource_group")
         get_stack.assert_called_with("services-prod.rg-azurite-sample-02.sample_storage", "rg-azurite-sample-02")
 
-def test_deploy_invalid_scope():
+def test_deploy_invalid_scope(tmp_path, monkeypatch):
+    resource_group = tmp_path / "configuration" / "sub" / "rg"
+    resource_group.mkdir(parents=True)
+    (tmp_path / "bicep").mkdir()
+    (tmp_path / "bicep" / "storage.bicep").write_text("")
+    (resource_group / "location.yaml").write_text("---\nlocation: australiaeast\n")
+    (resource_group / "app.yaml").write_text("---\nbicep_path: storage.bicep\nscope: subscriptoin\n")
+    monkeypatch.chdir(tmp_path)
     orchestrator = Orchestrator()
-    config = {"bicep_path": "storage/storage_account.bicep", "scope": "subscriptoin", "params": {}}
-    with patch.object(Orchestrator, 'load_config', return_value = config), \
-         patch.object(Deployer, 'deploy_bicep') as deploy_group:
+    with patch.object(Deployer, 'deploy_bicep') as deploy_group, \
+         patch.object(Deployer, 'deploy_bicep_subscription') as deploy_subscription:
         with pytest.raises(SystemExit) as e:
-            orchestrator.deploy("services-prod/rg-azurite-sample-02/sample_storage.yaml")
+            orchestrator.deploy("sub/rg/app.yaml")
         assert e.value.code == 1
         deploy_group.assert_not_called()
+        deploy_subscription.assert_not_called()
