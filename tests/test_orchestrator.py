@@ -1,5 +1,8 @@
 from unittest.mock import patch
+import json
 import os
+import subprocess
+import sys
 import pytest
 
 from nitra.lib.orchestrator import Orchestrator
@@ -129,18 +132,15 @@ def test_destroy_missing_stack_is_skipped():
 
 def test_stack_exists_subscription_scope_has_no_resource_group():
     orchestrator = Orchestrator()
-    with patch.object(Subscription, 'set_subscription') as set_subscription, \
-         patch.object(Subproc, 'get_stack', return_value = (0, "{}")) as get_stack:
+    with patch.object(Subproc, 'get_stack', return_value = (0, "{}")) as get_stack:
         assert orchestrator.stack_exists("services-prod.policy.allowed-locations", "policy", "services-prod", "subscription")
-        set_subscription.assert_called_with("services-prod")
-        get_stack.assert_called_with("services-prod.policy.allowed-locations", None)
+        get_stack.assert_called_with("services-prod.policy.allowed-locations", None, "id-services-prod")
 
 def test_stack_exists_not_found():
     orchestrator = Orchestrator()
-    with patch.object(Subscription, 'set_subscription'), \
-         patch.object(Subproc, 'get_stack', return_value = (3, "")) as get_stack:
+    with patch.object(Subproc, 'get_stack', return_value = (3, "")) as get_stack:
         assert not orchestrator.stack_exists("services-prod.rg-nitra-sample-02.sample_storage", "rg-nitra-sample-02", "services-prod", "resource_group")
-        get_stack.assert_called_with("services-prod.rg-nitra-sample-02.sample_storage", "rg-nitra-sample-02")
+        get_stack.assert_called_with("services-prod.rg-nitra-sample-02.sample_storage", "rg-nitra-sample-02", "id-services-prod")
 
 def test_deploy_invalid_scope(tmp_path, monkeypatch):
     resource_group = tmp_path / "configuration" / "sub" / "rg"
@@ -169,8 +169,7 @@ def test_dependency_with_dotted_file_name(tmp_path, monkeypatch):
     (resource_group / "app.yaml").write_text("---\nbicep_path: storage.bicep\nparams:\n  location: Ref:sub.rg.storage.v2:storageLocation\n")
     monkeypatch.chdir(tmp_path)
     orchestrator = Orchestrator()
-    with patch.object(Subscription, 'set_subscription'), \
-         patch.object(Deployer, 'deploy_bicep') as deploy_bicep:
+    with patch.object(Deployer, 'deploy_bicep') as deploy_bicep:
         orchestrator.deploy("sub/rg/app.yaml")
     # the dependency deploys first, from the right file and with the right stack name
     assert [c.args[4] for c in deploy_bicep.call_args_list] == ["sub.rg.storage.v2", "sub.rg.app"]
@@ -196,8 +195,7 @@ def test_circular_reference_stops_before_anything_runs(tmp_path, monkeypatch, ca
     # b also depends on an unrelated config that would otherwise deploy before the cycle is hit
     make_reference_project(tmp_path, {"a": ["b"], "b": ["unrelated", "a"], "unrelated": []})
     monkeypatch.chdir(tmp_path)
-    with patch.object(Subscription, 'set_subscription'), \
-         patch.object(Deployer, 'deploy_bicep') as deploy_bicep, \
+    with patch.object(Deployer, 'deploy_bicep') as deploy_bicep, \
          patch.object(HookOrchestrator, 'run_hooks') as run_hooks:
         with pytest.raises(SystemExit) as e:
             Orchestrator().deploy("sub/rg/a.yaml")
@@ -218,8 +216,7 @@ def test_self_reference(tmp_path, monkeypatch, capfd):
 def test_circular_reference_in_bulk_deploy(tmp_path, monkeypatch, capfd):
     make_reference_project(tmp_path, {"a": ["b"], "b": ["c"], "c": ["a"]})
     monkeypatch.chdir(tmp_path)
-    with patch.object(Subscription, 'set_subscription'), \
-         patch.object(Deployer, 'deploy_bicep') as deploy_bicep, \
+    with patch.object(Deployer, 'deploy_bicep') as deploy_bicep, \
          patch.object(HookOrchestrator, 'run_hooks'):
         with pytest.raises(SystemExit):
             Orchestrator().deploy_resource_group("sub/rg")
@@ -230,8 +227,7 @@ def test_shared_dependency_is_not_circular(tmp_path, monkeypatch):
     # a -> b -> d and a -> c -> d is a diamond, not a cycle
     make_reference_project(tmp_path, {"a": ["b", "c"], "b": ["d"], "c": ["d"], "d": []})
     monkeypatch.chdir(tmp_path)
-    with patch.object(Subscription, 'set_subscription'), \
-         patch.object(Deployer, 'deploy_bicep') as deploy_bicep, \
+    with patch.object(Deployer, 'deploy_bicep') as deploy_bicep, \
          patch.object(HookOrchestrator, 'run_hooks'):
         Orchestrator().deploy("sub/rg/a.yaml")
     assert deployed_configs(deploy_bicep) == ["sub.rg.d", "sub.rg.b", "sub.rg.c", "sub.rg.a"]
@@ -344,8 +340,7 @@ def make_shared_storage_project(root, storage_settings="", app_folder="sub/rg"):
 
 def run_deploy(method, *args, stack_state="succeeded"):
     stack = (0, f'{{"provisioningState": "{stack_state}"}}') if stack_state else (3, "")
-    with patch.object(Subscription, 'set_subscription'), \
-         patch.object(Subproc, 'get_stack', return_value = stack), \
+    with patch.object(Subproc, 'get_stack', return_value = stack), \
          patch.object(Deployer, 'deploy_bicep') as deploy_bicep, \
          patch.object(HookOrchestrator, 'run_hooks') as run_hooks:
         getattr(Orchestrator(), method)(*args)
@@ -406,3 +401,83 @@ def test_redeploy_as_dependency_must_be_boolean(tmp_path, monkeypatch, capfd):
     with pytest.raises(SystemExit):
         Orchestrator().load_config("sub/rg/storage.yaml")
     assert "'redeploy_as_dependency' must be true or false" in capfd.readouterr().err
+
+def test_full_run_never_switches_default_subscription(tmp_path, monkeypatch):
+    # Records every az command from a deploy then destroy of a two-subscription project
+    make_multi_folder_project(tmp_path, {"sub-a/rg/shared": [], "sub-b/rg/app": ["sub-a/rg/shared"]})
+    (tmp_path / "scripts").mkdir()
+    (tmp_path / "scripts" / "hook.sh").write_text("exit 0\n")
+    app = tmp_path / "configuration" / "sub-b" / "rg" / "app.yaml"
+    app.write_text(app.read_text().replace("params:", "post_hooks:\n  BashScript: hook.sh\nparams:"))
+    monkeypatch.chdir(tmp_path)
+    commands, hook_environments = [], []
+
+    def fake_run(command, **kwargs):
+        if command[0] == "sh":
+            hook_environments.append(kwargs["env"])
+            return subprocess.CompletedProcess(command, 0)
+        commands.append(command)
+        stdout = "true" if command[1:3] == ["group", "exists"] else '{"outputs": {"output": {"value": "x"}}}'
+        return subprocess.CompletedProcess(command, 0, stdout=stdout, stderr="")
+
+    with patch("subprocess.run", side_effect = fake_run):
+        Orchestrator().deploy_account()
+        Orchestrator().destroy_account()
+
+    assert commands
+    assert not [c for c in commands if c[1:3] == ["account", "set"]]
+    for command in commands:
+        assert command[command.index("--subscription") + 1] in ("id-sub-a", "id-sub-b"), command
+    # the stack in sub-b is created and destroyed in sub-b, its Ref: output is read from sub-a
+    assert any(c[1:4] == ["stack", "group", "show"] and "sub-a.rg.shared" in c and "id-sub-a" in c for c in commands)
+    assert any(c[1:4] == ["stack", "group", "create"] and "sub-b.rg.app" in c and "id-sub-b" in c for c in commands)
+    assert any(c[1:4] == ["stack", "group", "delete"] and "sub-b.rg.app" in c and "id-sub-b" in c for c in commands)
+    # the post-hook is told where the deployment went
+    assert hook_environments[0]["NITRA_SUBSCRIPTION"] == "sub-b"
+    assert hook_environments[0]["NITRA_SUBSCRIPTION_ID"] == "id-sub-b"
+    assert hook_environments[0]["NITRA_RESOURCE_GROUP"] == "rg"
+    assert hook_environments[0]["NITRA_CONFIGURATION"] == "sub-b/rg/app.yaml"
+
+def test_unknown_subscription_fails_before_hooks(tmp_path, monkeypatch):
+    make_shared_storage_project(tmp_path)
+    monkeypatch.chdir(tmp_path)
+
+    def unknown(self, name):
+        sys.exit(1)
+
+    monkeypatch.setattr(Subscription, "get_subscription_id", unknown)
+    with patch.object(HookOrchestrator, 'run_hooks') as run_hooks, \
+         patch.object(Deployer, 'deploy_bicep') as deploy_bicep:
+        with pytest.raises(SystemExit):
+            Orchestrator().deploy("sub/rg/storage.yaml")
+    run_hooks.assert_not_called()
+    deploy_bicep.assert_not_called()
+
+def test_hook_az_commands_default_to_config_subscription(tmp_path, monkeypatch, capfd):
+    make_shared_storage_project(tmp_path)
+    # a stand in az that reports the default subscription from whichever config folder it is given
+    bin_dir = tmp_path / "fake-bin"
+    bin_dir.mkdir()
+    (bin_dir / "az").write_text(
+        "#!/bin/sh\n"
+        "python3 -c \"import json,os; p=json.load(open(os.path.join(os.environ['AZURE_CONFIG_DIR'],'azureProfile.json'),encoding='utf-8-sig')); "
+        "print('hook az default:', [s['name'] for s in p['subscriptions'] if s['isDefault']][0], 'telemetry:', os.environ.get('AZURE_CORE_COLLECT_TELEMETRY'))\"\n")
+    (bin_dir / "az").chmod(0o755)
+    monkeypatch.setenv("PATH", f"{bin_dir}{os.pathsep}{os.environ['PATH']}")
+    real_config = tmp_path / "real-az-config"
+    real_config.mkdir()
+    (real_config / "azureProfile.json").write_text(json.dumps({"subscriptions": [
+        {"id": "id-other", "name": "other", "isDefault": True},
+        {"id": "id-sub", "name": "sub", "isDefault": False},
+    ]}), encoding="utf-8-sig")
+    monkeypatch.setenv("AZURE_CONFIG_DIR", str(real_config))
+    (tmp_path / "scripts" / "hook.sh").write_text("az account show\n")
+    monkeypatch.chdir(tmp_path)
+
+    with patch.object(Deployer, 'deploy_bicep'):
+        Orchestrator().deploy("sub/rg/storage.yaml")
+
+    # and az telemetry is off, so no background upload writes into the removed temporary folder
+    assert "hook az default: sub telemetry: false" in capfd.readouterr().out
+    # the user's own default is unchanged
+    assert json.loads((real_config / "azureProfile.json").read_text(encoding="utf-8-sig"))["subscriptions"][0]["isDefault"] is True

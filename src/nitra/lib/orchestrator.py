@@ -157,29 +157,26 @@ class Orchestrator():
         return location["location"]
 
     def stack_exists(self, deployment_name, resource_group, subscription, scope):
-        self.subscription.set_subscription(subscription)
         if scope == "subscription":
             resource_group = None
-        returncode, _ = self.subproc.get_stack(deployment_name, resource_group)
+        returncode, _ = self.subproc.get_stack(deployment_name, resource_group, self.subscription.get_subscription_id(subscription))
         return returncode == 0
 
     def stack_deployed(self, deployment_name, resource_group, subscription, scope):
         # Only a stack that last deployed successfully is sure to have its outputs
-        self.subscription.set_subscription(subscription)
         if scope == "subscription":
             resource_group = None
-        returncode, output = self.subproc.get_stack(deployment_name, resource_group)
+        returncode, output = self.subproc.get_stack(deployment_name, resource_group, self.subscription.get_subscription_id(subscription))
         if returncode != 0:
             return False
         return str(json.loads(output).get("provisioningState", "")).lower() == "succeeded"
 
-    def check_deployment_dependancy(self, value, subscription):
+    def check_deployment_dependancy(self, value):
         reference = parse_reference(value)
         # Dependencies are redeployed so their hooks run and outputs are current, unless the
         # dependency sets 'redeploy_as_dependency: false' (see deploy)
         self.logger.info("Deployment has dependencies. Resolving...")
         self.deploy(reference.configuration, as_dependency=True)
-        self.subscription.set_subscription(subscription)
 
     def deploy(self, configuration, deploy_mode="deploy", dry_run=False, as_dependency=False):
         if configuration in self.deploys:
@@ -194,19 +191,22 @@ class Orchestrator():
         subscription = self.get_subscription(configuration)
         resource_group = self.get_resource_group(configuration)
         scope = config.get("scope", "resource_group")
+        if not dry_run:
+            # Fails on an unknown subscription before any hooks or deployments run
+            self.subscription.get_subscription_id(subscription)
 
         if deploy_mode == "deploy" and not dry_run:
             if as_dependency and self.can_skip_dependency(configuration, config, deployment_name, resource_group, subscription, scope):
                 self.logger.info(f"Skipping {configuration}: already deployed and redeploy_as_dependency is false\n")
                 return
             # Deploy the configs this one takes outputs from first, destroy does not need this ordering
-            self.deploy_dependencies(config, subscription)
+            self.deploy_dependencies(config)
 
         self.logger.info(f"{deploy_mode}ing: {configuration} to {subscription}")
         if dry_run:
             return [config['params'], config['bicep_path'], resource_group, location, deployment_name, subscription]
         if deploy_mode == "deploy":
-            self.deploy_stack(config, location, deployment_name, resource_group, subscription, scope)
+            self.deploy_stack(configuration, config, location, deployment_name, resource_group, subscription, scope)
         else:
             self.destroy_stack(config, deployment_name, resource_group, subscription, scope)
 
@@ -217,22 +217,45 @@ class Orchestrator():
                 and not config.get("redeploy_as_dependency", True)
                 and self.stack_deployed(deployment_name, resource_group, subscription, scope))
 
-    def deploy_dependencies(self, config, subscription):
+    def deploy_dependencies(self, config):
         for value in config['params'].values():
             if is_reference(value):
-                self.check_deployment_dependancy(value, subscription)
+                self.check_deployment_dependancy(value)
 
-    def deploy_stack(self, config, location, deployment_name, resource_group, subscription, scope):
+    def run_hooks(self, hooks, environment):
+        # az commands run by the hook default to the config's subscription, see Subscription.az_config_for
+        with self.subscription.az_config_for(environment["NITRA_SUBSCRIPTION_ID"]) as config_dir:
+            if config_dir:
+                # az starts a background telemetry upload after each command that writes into the config folder,
+                # after the hook has finished and the folder is removed, so it is turned off for hook az commands
+                environment = {**environment, "AZURE_CONFIG_DIR": config_dir, "AZURE_CORE_COLLECT_TELEMETRY": "false"}
+            self.hook_orchestrator.run_hooks(hooks, environment)
+
+    def hook_environment(self, configuration, deployment_name, resource_group, subscription, location, scope):
+        # Hooks are told where the deployment is going, e.g. for tools other than az
+        environment = {
+            "NITRA_CONFIGURATION": configuration,
+            "NITRA_DEPLOYMENT_NAME": deployment_name,
+            "NITRA_SUBSCRIPTION": subscription,
+            "NITRA_SUBSCRIPTION_ID": self.subscription.get_subscription_id(subscription),
+            "NITRA_LOCATION": location,
+        }
+        if scope == "resource_group":
+            environment["NITRA_RESOURCE_GROUP"] = resource_group
+        return environment
+
+    def deploy_stack(self, configuration, config, location, deployment_name, resource_group, subscription, scope):
         action_on_unmanage = config.get("action_on_unmanage", "deleteResources")
         deny_settings_mode = config.get("deny_settings_mode", "None")
+        environment = self.hook_environment(configuration, deployment_name, resource_group, subscription, location, scope)
         if config.get('pre_hooks'):
-            self.hook_orchestrator.run_hooks(config['pre_hooks'])
+            self.run_hooks(config['pre_hooks'], environment)
         if scope == "subscription":
             self.deployer.deploy_bicep_subscription(config['params'], config['bicep_path'], location, deployment_name, action_on_unmanage, deny_settings_mode, subscription)
         else:
             self.deployer.deploy_bicep(config['params'], config['bicep_path'], resource_group, location, deployment_name, action_on_unmanage, deny_settings_mode, subscription)
         if config.get('post_hooks'):
-            self.hook_orchestrator.run_hooks(config['post_hooks'])
+            self.run_hooks(config['post_hooks'], environment)
 
     def destroy_stack(self, config, deployment_name, resource_group, subscription, scope):
         action_on_unmanage = config.get("action_on_unmanage", "deleteResources")

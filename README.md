@@ -2,7 +2,7 @@
 
 Nitra is an Azure Bicep orchestration tool. The main goal is to separate environment configuration from templates. This is inspired by the AWS Sceptre tool.
 
-There is some additional getting started info in the [wiki](https://github.com/NathanKewley/Azurite/wiki)
+There is some additional getting started info in the [wiki](https://github.com/NathanKewley/nitra/wiki)
 
 There is also a sample project with some examples of usage [here](https://github.com/NathanKewley/azurite-sample-project)
 
@@ -35,7 +35,8 @@ There is also a sample project with some examples of usage [here](https://github
 ## Assumptions
 
 * You are working within a single Azure Tenancy
-* Each subscription has a unique name
+* Each subscription has a unique name, or its folder is named with the subscription id
+* Nitra never changes your default Azure CLI subscription (`az account set`), every command is given its subscription explicitly
 
 ## Possible Future Features
 
@@ -71,7 +72,7 @@ Given the example structure above a few important things to note:
 
 * `bicep` - this folder contains all of your bicep templates.
 * `configuration` - this contains your configuration for deployments, the hierarchy is important.
-* `Subscription_1` - This is the root level under configuration. `Subscription_1` matched exactly the name of a subscription in Azure.
+* `Subscription_1` - This is the root level under configuration. `Subscription_1` matches exactly the name of a subscription in Azure (or its subscription id).
 * `Resource_Group_1` - At the root level of a given subscription. This sets the resource group for a deployment within that subscription.
 * `location.yaml` - A special configuration file to set the location of the resource group.
 * `storage_account_and_container.yaml` - This is a deployable configuration. It will link to a template in the `bicep` folder and contain the required parameters.
@@ -155,11 +156,24 @@ params:
   instanceCount: 2
 ```
 
-`scope` is an optional parameter, defaulting to `resource_group` when not specified. The other valid value is `subscription`. This sets the deployment at a subscription scope rather than a resource group scope. This is particularly useful for setting up `Azure Policy`. Please see the [Working with Azure Policy](https://github.com/NathanKewley/Azurite/wiki/Working-with-Azure-Policy) wiki page for more details on this.
+`scope` is an optional parameter, defaulting to `resource_group` when not specified. The other valid value is `subscription`. This sets the deployment at a subscription scope rather than a resource group scope. This is particularly useful for setting up `Azure Policy`. Please see the [Working with Azure Policy](https://github.com/NathanKewley/nitra/wiki/Working-with-Azure-Policy) wiki page for more details on this.
 
 `action_on_unmanage` and `deny_settings_mode` set these settings for the [stack group](https://learn.microsoft.com/en-us/cli/azure/stack/group?view=azure-cli-latest#az-stack-group-show) that is created by this configuration. Both are optional and default to `deleteResources` and `None` respectively.
 
 `pre_hooks` and `post_hooks` allow you to specify external scripts that should be run before or after the bicep deployment respectively. Scripts are looked up in the `scripts/` folder, and their output is shown as they run. If a hook returns a non-success exit code the deployment is stopped. The supported hook types are `Python3Script` and `BashScript`. `pre_hooks` and `post_hooks` are both optional.
+
+Any `az` command a hook runs uses the subscription of the configuration the hook belongs to, without needing `--subscription`. Nitra does this by giving the hook its own temporary Azure CLI config folder (`AZURE_CONFIG_DIR`) that uses your normal login but has that subscription as the default, so your own default subscription is never changed. Azure CLI telemetry is turned off for `az` commands run inside hooks.
+
+Hooks are also given the details of the deployment as environment variables, e.g. `az storage account list -g "$NITRA_RESOURCE_GROUP"`:
+
+| Variable | Value |
+|---|---|
+| `NITRA_SUBSCRIPTION` | Subscription name (the folder name) |
+| `NITRA_SUBSCRIPTION_ID` | Subscription id |
+| `NITRA_RESOURCE_GROUP` | Resource group (not set for `scope: subscription`) |
+| `NITRA_LOCATION` | Location from `location.yaml` |
+| `NITRA_DEPLOYMENT_NAME` | Deployment stack name |
+| `NITRA_CONFIGURATION` | Path of the configuration, relative to `configuration/` |
 
 #### Referencing Other Deployment Outputs
 
@@ -259,4 +273,4 @@ Destroy will NOT destroy resource groups. This is because there could be resourc
 
 ## Environment Variables
 
-Please see the [Environment Variables](https://github.com/NathanKewley/Azurite/wiki/Environment-Variables) wiki page for details.
+Please see the [Environment Variables](https://github.com/NathanKewley/nitra/wiki/Environment-Variables) wiki page for details.

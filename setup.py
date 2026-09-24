@@ -11,9 +11,9 @@ setuptools.setup(
     description="Azure Bicep Deployment Orchestration",
     long_description=long_description,
     long_description_content_type="text/markdown",
-    url="https://github.com/NathanKewley/azurite",
+    url="https://github.com/NathanKewley/nitra",
     project_urls={
-        "Bug Tracker": "https://github.com/NathanKewley/azurite/issues",
+        "Bug Tracker": "https://github.com/NathanKewley/nitra/issues",
     },
     classifiers=[
         "Programming Language :: Python :: 3",
