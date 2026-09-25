@@ -1,4 +1,5 @@
 import json
+import logging
 import os
 import sys
 import tempfile
@@ -6,6 +7,9 @@ import yaml
 
 from nitra.lib.logger import Logger as logger
 from nitra.lib.reference import is_reference, parse_reference
+
+# How Bicep @secure() parameters appear in the compiled ARM template
+SECURE_PARAMETER_TYPES = ("securestring", "secureobject")
 
 class Deployer():
 
@@ -61,13 +65,37 @@ class Deployer():
             parameters[param] = {"value": value}
         return parameters
 
-    def write_parameters_file(self, params):
+    def get_secure_parameters(self, bicep):
+        # Names of the parameters the template marks @secure(), or None if the template cannot be compiled
+        returncode, output = self.subproc.build_bicep(bicep)
+        if returncode != 0:
+            return None
+        try:
+            template = json.loads(output)
+        except ValueError:
+            return None
+        return {name for name, parameter in template.get("parameters", {}).items()
+                if str(parameter.get("type", "")).lower() in SECURE_PARAMETER_TYPES}
+
+    def log_parameters(self, parameters, bicep):
+        # The template is only compiled when debug logging is on. Values of @secure() parameters are never
+        # logged, and if the template cannot be read no values are logged at all
+        if not self.logger.isEnabledFor(logging.DEBUG):
+            return
+        secure = self.get_secure_parameters(bicep)
+        if secure is None:
+            self.logger.debug(f"Deployment Parameters (values hidden, unable to read which parameters are @secure() in bicep/{bicep}): {', '.join(parameters)}")
+            return
+        shown = {name: ({"value": "***"} if name in secure else value) for name, value in parameters.items()}
+        self.logger.debug(f"Deployment Parameters: {json.dumps(shown, default=str)}")
+
+    def write_parameters_file(self, params, bicep):
         parameters_file = {
             "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentParameters.json#",
             "contentVersion": "1.0.0.0",
             "parameters": self.build_parameters(params)
         }
-        self.logger.debug(f"Deployment Parameters: {json.dumps(parameters_file['parameters'], default=str)}")
+        self.log_parameters(parameters_file["parameters"], bicep)
         with tempfile.NamedTemporaryFile(mode="w", prefix="nitra-", suffix=".json", delete=False) as file:
             json.dump(parameters_file, file, default=str)
         return file.name
@@ -80,7 +108,7 @@ class Deployer():
         self.logger.debug(f"Deployment Name: {deployment_name}")
         self.logger.debug(f"Deployment Subscription: {subscription}")
         self.logger.debug(f"Deployment Resource Group: {resource_group}")
-        parameters_file = self.write_parameters_file(params)
+        parameters_file = self.write_parameters_file(params, bicep)
         try:
             returncode, deploy_result = self.subproc.deploy_group_create(bicep, resource_group, deployment_name, action_on_unmanage, deny_settings_mode, parameters_file, subscription_id)
         finally:
@@ -96,7 +124,7 @@ class Deployer():
 
         self.logger.debug(f"Deployment Name: {deployment_name}")
         self.logger.debug(f"Deployment Subscription: {subscription}")
-        parameters_file = self.write_parameters_file(params)
+        parameters_file = self.write_parameters_file(params, bicep)
         try:
             returncode, deploy_result = self.subproc.deploy_subscription_create(bicep, deployment_name, action_on_unmanage, deny_settings_mode, parameters_file, location, subscription_id)
         finally:

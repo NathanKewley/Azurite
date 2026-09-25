@@ -109,6 +109,10 @@ class Subproc():
         result = self._run(command)
         return result.returncode, result.stdout
 
+    def build_bicep(self, bicep):
+        # Compiles the template to ARM JSON locally, it does not contact Azure
+        return self.run_command_output_or_error(["az", "bicep", "build", "--file", f"bicep/{bicep}", "--stdout"])
+
     def list_subscriptions(self):
         # Reads the subscriptions from the local az login, it does not change anything
         return self.run_command_output_or_error(["az", "account", "list", "--output", "json"])

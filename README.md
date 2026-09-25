@@ -156,6 +156,8 @@ params:
   instanceCount: 2
 ```
 
+Mark secret parameters with `@secure()` in the Bicep template. With `NITRA_LOGGING_LEVEL=DEBUG`, Nitra logs the parameters it deploys with, and shows the values of `@secure()` parameters as `***`. If the template cannot be compiled to check, no parameter values are logged at all. Note that values in the configuration YAML are stored in your repository, so avoid putting real secrets there.
+
 `scope` is an optional parameter, defaulting to `resource_group` when not specified. The other valid value is `subscription`. This sets the deployment at a subscription scope rather than a resource group scope. This is particularly useful for setting up `Azure Policy`. Please see the [Working with Azure Policy](https://github.com/NathanKewley/nitra/wiki/Working-with-Azure-Policy) wiki page for more details on this.
 
 `action_on_unmanage` and `deny_settings_mode` set these settings for the [stack group](https://learn.microsoft.com/en-us/cli/azure/stack/group?view=azure-cli-latest#az-stack-group-show) that is created by this configuration. Both are optional and default to `deleteResources` and `None` respectively.

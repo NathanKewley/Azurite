@@ -137,3 +137,8 @@ def test_hooks_receive_deployment_environment(tmp_path, monkeypatch, capfd):
     assert "target=sub-id/rg" in out
     # the rest of the environment is kept, so the script can still find az, python3, etc.
     assert "path=/" in out
+
+def test_build_bicep_compiles_locally():
+    with patch("subprocess.run", return_value = completed([], 0, "{}", "WARNING: linter")) as run:
+        assert subproc.build_bicep("storage/storage_account.bicep") == (0, "{}")
+        assert run.call_args[0][0] == ["az", "bicep", "build", "--file", "bicep/storage/storage_account.bicep", "--stdout"]

@@ -132,7 +132,7 @@ def test_write_parameters_file():
     subproc = Subproc()
     subscription = Subscription(subproc)
     deployer = Deployer(subproc, subscription)
-    parameters_file = deployer.write_parameters_file({'allowedLocations': ['australiaeast'], 'enabled': False})
+    parameters_file = deployer.write_parameters_file({'allowedLocations': ['australiaeast'], 'enabled': False}, "template.bicep")
     try:
         parameters = json.loads(open(parameters_file, 'r').read())
         assert parameters['contentVersion'] == "1.0.0.0"
@@ -163,3 +163,50 @@ def test_destroy_targets_subscription_without_switching():
         deployer.destroy_bicep_subscription("sub.policy.config", "sub", "deleteResources")
     group_destroy.assert_called_once_with("rg", "sub.rg.config", "deleteResources", "id-sub")
     sub_destroy.assert_called_once_with("sub.policy.config", "deleteResources", "id-sub")
+
+COMPILED_TEMPLATE = json.dumps({"parameters": {
+    "adminPassword": {"type": "securestring"},
+    "connection": {"type": "secureObject"},
+    "name": {"type": "string"},
+}})
+PARAMS = {"adminPassword": "hunter2-secret", "connection": {"key": "conn-secret"}, "name": "my-app"}
+
+def debug_deployer(monkeypatch):
+    monkeypatch.setenv("NITRA_LOGGING_LEVEL", "DEBUG")
+    subproc = Subproc()
+    return Deployer(subproc, Subscription(subproc))
+
+def test_secure_parameter_values_hidden_in_debug_log(monkeypatch, capfd):
+    deployer = debug_deployer(monkeypatch)
+    with patch.object(Subproc, 'build_bicep', return_value = (0, COMPILED_TEMPLATE)) as build:
+        parameters_file = deployer.write_parameters_file(PARAMS, "app.bicep")
+    try:
+        build.assert_called_once_with("app.bicep")
+        err = capfd.readouterr().err
+        assert '"adminPassword": {"value": "***"}' in err
+        assert '"connection": {"value": "***"}' in err
+        assert '"name": {"value": "my-app"}' in err
+        assert "hunter2-secret" not in err and "conn-secret" not in err
+        # the deployment itself still gets the real values
+        written = json.loads(open(parameters_file).read())["parameters"]
+        assert written["adminPassword"] == {"value": "hunter2-secret"}
+    finally:
+        os.remove(parameters_file)
+
+def test_all_values_hidden_when_template_cannot_be_read(monkeypatch, capfd):
+    deployer = debug_deployer(monkeypatch)
+    with patch.object(Subproc, 'build_bicep', return_value = (1, "ERROR: BCP308 ...")):
+        parameters_file = deployer.write_parameters_file(PARAMS, "app.bicep")
+    os.remove(parameters_file)
+    err = capfd.readouterr().err
+    assert "values hidden, unable to read which parameters are @secure() in bicep/app.bicep): adminPassword, connection, name" in err
+    assert "hunter2-secret" not in err and "my-app" not in err
+
+def test_template_not_compiled_without_debug_logging(monkeypatch, capfd):
+    monkeypatch.setenv("NITRA_LOGGING_LEVEL", "INFO")
+    subproc = Subproc()
+    deployer = Deployer(subproc, Subscription(subproc))
+    with patch.object(Subproc, 'build_bicep') as build:
+        os.remove(deployer.write_parameters_file(PARAMS, "app.bicep"))
+    build.assert_not_called()
+    assert "hunter2-secret" not in capfd.readouterr().err
